@@ -1,0 +1,402 @@
+:root {
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+
+  --bg: #ffffff;
+  --prose: #79798a;
+  --fg: #1c1c28;
+  --accent: #2563eb;
+  --sel: #bfd7ff;
+  --active-line: rgba(37, 99, 235, 0.045);
+
+  --num: #2563eb;
+  --unit: #7c3aed;
+  --cur: #059669;
+  --op: #7d8698;
+  --kw: #b45309;
+  --fn: #0891b2;
+  --var: #e11d48;
+  --comment: #a0a4b8;
+
+  --answer: #059669;
+  --answer-bg: #f7faf9;
+  --sep: #e7e9ef;
+  --panel: #f4f5f8;
+  --pill-bg: #0f172a;
+  --pill-fg: #6ee7b7;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15151d;
+    --prose: #77778c;
+    --fg: #e8e8f2;
+    --accent: #60a5fa;
+    --sel: #2b3f63;
+    --active-line: rgba(148, 163, 184, 0.055);
+
+    --num: #60a5fa;
+    --unit: #a78bfa;
+    --cur: #34d399;
+    --op: #8b94a8;
+    --kw: #fbbf24;
+    --fn: #22d3ee;
+    --var: #fb7185;
+    --comment: #565666;
+
+    --answer: #34d399;
+    --answer-bg: #191922;
+    --sep: #23232e;
+    --panel: #111119;
+    --pill-bg: #e2e8f0;
+    --pill-fg: #047857;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--prose);
+  overflow: hidden;
+}
+
+.app {
+  height: 100%;
+  position: relative;
+  display: flex;
+}
+
+/* ---- sidebar ---- */
+
+.sidebar {
+  width: 232px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-right: 1px solid var(--sep);
+  min-height: 0;
+}
+
+.sidebar-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 10px 8px;
+}
+
+.sheet-search {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--sep);
+  border-radius: 7px;
+  padding: 5px 9px;
+  outline: none;
+}
+
+.sheet-search::placeholder {
+  color: var(--prose);
+}
+
+.sheet-search:focus {
+  border-color: var(--accent);
+}
+
+.icon-btn {
+  border: none;
+  background: none;
+  color: var(--prose);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1;
+  padding: 5px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: color-mix(in srgb, var(--prose) 14%, transparent);
+  color: var(--fg);
+}
+
+.sheet-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2px 8px 14px;
+}
+
+.sheet-item {
+  position: relative;
+  padding: 7px 26px 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 2px;
+}
+
+.sheet-item:hover {
+  background: color-mix(in srgb, var(--prose) 9%, transparent);
+}
+
+.sheet-item.active {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.sheet-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sheet-meta {
+  font-size: 11.5px;
+  color: var(--prose);
+  margin-top: 1px;
+}
+
+.sheet-del {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  translate: 0 -50%;
+  border: none;
+  background: none;
+  color: var(--prose);
+  font-size: 14px;
+  padding: 4px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.sheet-item:hover .sheet-del {
+  opacity: 0.75;
+}
+
+.sheet-del:hover {
+  opacity: 1;
+  color: var(--var);
+  background: color-mix(in srgb, var(--var) 14%, transparent);
+}
+
+.sheet-empty {
+  padding: 14px 10px;
+  font-size: 13px;
+  color: var(--prose);
+}
+
+.sidebar-open {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 20;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  border: 1px solid var(--sep);
+}
+
+/* ---- editor ---- */
+
+.editor-wrap {
+  position: relative;
+  height: 100%;
+  flex: 1;
+  min-width: 0;
+}
+
+/* answer column tint + separator, drawn behind the editor text */
+.editor-wrap::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 208px;
+  background: var(--answer-bg);
+  border-left: 1px solid var(--sep);
+  pointer-events: none;
+}
+
+.editor-wrap > .cm-editor {
+  position: relative;
+  height: 100%;
+}
+
+.cm-editor .cm-line {
+  color: var(--prose);
+}
+
+/* syntax */
+.ck-num { color: var(--num); }
+.ck-unit { color: var(--unit); }
+.ck-cur { color: var(--cur); }
+.ck-op { color: var(--op); }
+.ck-kw { color: var(--kw); }
+.ck-fn { color: var(--fn); }
+.ck-var { color: var(--var); font-weight: 600; }
+.ck-comment { color: var(--comment); font-style: italic; }
+.ck-heading { color: var(--fg); font-weight: 700; }
+.ck-label { color: var(--fg); font-weight: 600; }
+
+/* reference pills */
+.ck-ref {
+  display: inline-block;
+  padding: 0 7px;
+  margin: 0 1px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+
+.ck-ref-dead {
+  background: color-mix(in srgb, var(--var) 14%, transparent);
+  color: var(--var);
+  text-decoration: line-through;
+}
+
+.ck-answer.ck-ref-denied {
+  background: color-mix(in srgb, var(--var) 22%, transparent);
+}
+
+/* answers */
+.ck-answers {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 208px;
+  height: 0;
+  overflow: visible;
+  z-index: 5;
+}
+
+.ck-answer {
+  position: absolute;
+  right: 0;
+  width: 208px;
+  padding: 0 18px 0 10px;
+  line-height: 26.25px; /* editor 15px x 1.75 */
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--answer);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 6px;
+  transition: background 0.25s ease;
+}
+
+.ck-answer:hover {
+  background: color-mix(in srgb, var(--answer) 12%, transparent);
+}
+
+.ck-answer.ck-copied {
+  background: color-mix(in srgb, var(--answer) 28%, transparent);
+}
+
+.ck-answer-total {
+  font-weight: 700;
+}
+
+.ck-answer-var {
+  opacity: 0.62;
+}
+
+/* ---- quick popup (Alt+Space window) ---- */
+
+body.quick-body {
+  background: transparent;
+}
+
+.quick {
+  position: absolute;
+  inset: 8px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--bg);
+  border: 1px solid var(--sep);
+  border-radius: 14px;
+  padding: 0 20px;
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.38);
+  overflow: hidden;
+}
+
+.quick-in {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 20px;
+}
+
+.quick-in::placeholder {
+  color: var(--prose);
+}
+
+.quick-ans {
+  font-size: 20px;
+  font-weight: 650;
+  color: var(--answer);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quick-hint {
+  font-size: 11px;
+  color: var(--prose);
+  white-space: nowrap;
+}
+
+/* floating quick total */
+.total-pill {
+  position: fixed;
+  right: 24px;
+  bottom: 20px;
+  z-index: 10;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--pill-fg);
+  background: var(--pill-bg);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.total-pill:hover {
+  transform: translateY(-1px);
+}
+
+.total-pill:active {
+  transform: translateY(0);
+}

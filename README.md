@@ -1,0 +1,50 @@
+# Calcool
+
+A notepad calculator for Windows, modeled on [Soulver](https://soulver.app).
+Type math as plain sentences; answers appear live in a column on the right.
+
+```
+lunch was $18.50 + 20% tip        $22.20
+100 pounds in kg                  45.36 kg
+rent = $1,450
+rent × 12                         $17,400.00
+total
+```
+
+## Stack
+
+Tauri 2 (Rust shell) + React + TypeScript + CodeMirror 6.
+The calculation engine is our own TypeScript library in `src/engine/` built on decimal.js: a word-skipping tokenizer, a Pratt parser with percent/conversion phrase forms, a typed evaluator (numbers, percents, unit quantities, rates), and a sheet layer for variables, line references, and totals.
+[SPEC.md](SPEC.md) holds the full Soulver feature research and the roadmap.
+
+## Commands
+
+```
+npm install          # once
+npm run dev          # engine + UI in the browser (Vite, port 1420)
+npm test             # engine golden tests (vitest)
+npm run tauri dev    # the actual Windows app, debug
+npm run tauri build  # release build; installers land in src-tauri/target/release/bundle/
+```
+
+## Works today
+
+- Live per-line answers, word skipping, syntax highlighting, click-to-copy, quick total pill, autosave
+- Multi-sheet sidebar: sheetbook store, titles from the first line, most-recent-first, search, Ctrl+N new sheet, Ctrl+\ toggle, delete with a 20-entry trash kept in the store for recovery
+- Quick popup on a global hotkey: Alt+Space, falling back through Ctrl+Alt+Space / Alt+Shift+Space / Ctrl+Shift+Space / Alt+Q when a launcher owns the earlier ones (Flow Launcher and PowerToys Run both squat on Alt+Space). One-line calculator, always on top; Enter copies the answer and closes, Esc or losing focus closes. Bare entries auto-convert QuickSoulver-style: `21 miles` answers `33.8 km`, `31 C` answers `87.8 °F`, foreign currency answers in USD
+- Arithmetic incl. word operators, `2.5k`/`5M` multipliers, `1e3`, `0xFF`/`0b`/`0o`, thousands separators
+- Every common percent phrase: `10% of 200`, `200 - 10%`, `20 is what % of 160`, `180 is 10% off what`, `50 to 75 is what %`
+- Units with conversion and assimilation: length, mass, duration, temperature, data, speed, area, volume, angle
+- Currency with hourly-cached live rates (open.er-api.com) and an offline fallback table
+- Rates: `$25/hour × 14 hours`, `$500 at $20/hour`, `90 km / 3 days`
+- Variables (`rent = $1,450`, multi-word names), `total`/`average` lines, headings, labels, `//` and `#` comments
+- Live reference tokens: `lineN` renders as a pill showing the referenced answer; double-click an answer (or drag it into a line) to insert one, Ctrl+\ references the nearest answer above, and typing an operator on an empty line auto-references the previous answer. Tokens renumber themselves when lines are added or removed; deleting a referenced line breaks its tokens loudly (struck-through pill) instead of silently repointing them
+- Rounding and display forms: `to 2 dp`, `to nearest 10`, `as hex`, `as fraction`, `in sci`, `as %`
+- Date math, calendar-aware: `today + 3 weeks`, `April 1, 2019 - 3 months 5 days`, `Jan 31 2020 + 1 month` clamps to Feb 29, `days until christmas`, `next friday`, `3 March to 30 May` gives `2 months 3 weeks 6 days`, `weekday on March 9, 2024`, `days in February 2020`, `1978 to 2021`
+- Clock times: `now + 3 hours 15 minutes`, `4pm to 3am` gives `11 hours`, `noon + 90 minutes`, `3:45pm + 5`, `hours between 9am and 5:30pm`, `10:15 to decimal`
+- Workdays and holidays: `December 24 2027 + 2 workdays` skips the observed Christmas, `workdays from April 12 to June 15`, `10 March to 17 March in workdays`, `workdays in June 2027`, `workdays left in 2026`, `work hours between two dates`, `55h in work days`, `$500/workday × 4 weeks`. Holiday rules are computed in-app (US federal, UK bank incl. Easter, India national), region picked from the OS locale
+- Timezones, DST-correct via the platform ICU (nothing shipped): `6pm Sydney in Chicago`, `2am PST to GMT`, `time in Tokyo`, `9am SFO to JFK`, `3pm GMT+8 to Paris`, `time difference between London and Tokyo`, ~200 cities/countries/abbreviations/airport codes
+
+## Next (see SPEC.md for the full list)
+
+Scrubbable numbers, compound imperial units, finance phrases, settings (quick-popup hotkey, workday region, hours per workday), real files instead of localStorage for the sheetbook.
