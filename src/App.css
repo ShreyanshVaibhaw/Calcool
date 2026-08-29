@@ -253,6 +253,13 @@ body {
 .ck-heading { color: var(--fg); font-weight: 700; }
 .ck-label { color: var(--fg); font-weight: 600; }
 
+/* Alt held: numbers advertise that they scrub */
+.cm-editor.ck-alt .ck-num {
+  cursor: ew-resize;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
 /* reference pills */
 .ck-ref {
   display: inline-block;

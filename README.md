@@ -39,6 +39,7 @@ npm run tauri build  # release build; installers land in src-tauri/target/releas
 - Rates: `$25/hour × 14 hours`, `$500 at $20/hour`, `90 km / 3 days`
 - Variables (`rent = $1,450`, multi-word names), `total`/`average` lines, headings, labels, `//` and `#` comments
 - Live reference tokens: `lineN` renders as a pill showing the referenced answer; double-click an answer (or drag it into a line) to insert one, Ctrl+\ references the nearest answer above, and typing an operator on an empty line auto-references the previous answer. Tokens renumber themselves when lines are added or removed; deleting a referenced line breaks its tokens loudly (struck-through pill) instead of silently repointing them
+- Scrubbable numbers: hold Alt and drag any number sideways (or Alt+scroll) to change it live and watch every dependent line follow. Steps by the number's last decimal place, keeps digit grouping, and a whole drag is one undo
 - Rounding and display forms: `to 2 dp`, `to nearest 10`, `as hex`, `as fraction`, `in sci`, `as %`
 - Date math, calendar-aware: `today + 3 weeks`, `April 1, 2019 - 3 months 5 days`, `Jan 31 2020 + 1 month` clamps to Feb 29, `days until christmas`, `next friday`, `3 March to 30 May` gives `2 months 3 weeks 6 days`, `weekday on March 9, 2024`, `days in February 2020`, `1978 to 2021`
 - Clock times: `now + 3 hours 15 minutes`, `4pm to 3am` gives `11 hours`, `noon + 90 minutes`, `3:45pm + 5`, `hours between 9am and 5:30pm`, `10:15 to decimal`
@@ -47,4 +48,4 @@ npm run tauri build  # release build; installers land in src-tauri/target/releas
 
 ## Next (see SPEC.md for the full list)
 
-Scrubbable numbers, compound imperial units, finance phrases, settings (quick-popup hotkey, workday region, hours per workday), real files instead of localStorage for the sheetbook.
+Compound imperial units, finance phrases, settings (quick-popup hotkey, workday region, hours per workday), real files instead of localStorage for the sheetbook.

@@ -1,7 +1,8 @@
 import { EditorView, ViewPlugin, ViewUpdate, Decoration, DecorationSet, WidgetType, keymap, drawSelection, highlightActiveLine } from "@codemirror/view";
-import { EditorState, StateField, StateEffect, RangeSetBuilder, MapMode, ChangeSpec } from "@codemirror/state";
+import { EditorState, StateField, StateEffect, RangeSetBuilder, MapMode, ChangeSpec, Transaction, Extension } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { evaluateSheet, SheetOut } from "./engine/sheet";
+import { Decimal } from "./engine/value";
 
 export const recalc = StateEffect.define<null>();
 
@@ -164,6 +165,140 @@ const operatorAutoRef = EditorView.inputHandler.of((view, from, to, text) => {
 });
 
 // ---------------------------------------------------------------------------
+// scrubbable numbers: Alt+drag a number sideways (or Alt+scroll) to change it live
+// ---------------------------------------------------------------------------
+
+interface ScrubTarget {
+  from: number;
+  to: number;
+  text: string;
+}
+
+const SCRUB_RE = /^\d[\d,]*(\.\d+)?$/; // plain decimals only; hex, 1e3 and underscores stay hands-off
+
+function findScrubTarget(view: EditorView, pos: number): ScrubTarget | null {
+  const sheet = view.state.field(sheetField);
+  const line = view.state.doc.lineAt(pos);
+  const sems = sheet.lines[line.number - 1]?.sem ?? [];
+  for (const t of sems) {
+    if (t.type !== "number" || pos < t.from || pos > t.to) continue;
+    const text = view.state.doc.sliceString(t.from, t.to);
+    if (!SCRUB_RE.test(text)) return null;
+    return { from: t.from, to: t.to, text };
+  }
+  return null;
+}
+
+const groupInt = (s: string) => s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+function scrubbing(): Extension {
+  interface Session {
+    from: number;
+    len: number;
+    originalText: string;
+    base: Decimal;
+    step: Decimal;
+    decimals: number;
+    grouped: boolean;
+    steps: number;
+  }
+  let session: Session | null = null;
+  let wheelTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const begin = (t: ScrubTarget) => {
+    const decimals = t.text.includes(".") ? t.text.split(".")[1].length : 0;
+    session = {
+      from: t.from,
+      len: t.to - t.from,
+      originalText: t.text,
+      base: new Decimal(t.text.replace(/,/g, "")),
+      step: new Decimal(1).div(Decimal.pow(10, decimals)),
+      decimals,
+      grouped: t.text.includes(","),
+      steps: 0,
+    };
+  };
+
+  const apply = (view: EditorView, steps: number) => {
+    if (!session || steps === session.steps) return;
+    session.steps = steps;
+    const value = session.base.plus(session.step.mul(steps));
+    let text = value.toFixed(session.decimals);
+    if (session.grouped) {
+      const [int, frac] = text.split(".");
+      text = groupInt(int) + (frac !== undefined ? "." + frac : "");
+    }
+    view.dispatch({
+      changes: { from: session.from, to: session.from + session.len, insert: text },
+      annotations: Transaction.addToHistory.of(false),
+    });
+    session.len = text.length;
+  };
+
+  // collapse the whole scrub into one undo step: silently revert, then re-apply on the record
+  const commit = (view: EditorView) => {
+    if (!session) return;
+    const { from, len, originalText, steps } = session;
+    const finalText = view.state.doc.sliceString(from, from + len);
+    session = null;
+    if (steps === 0 || finalText === originalText) return;
+    view.dispatch({ changes: { from, to: from + len, insert: originalText }, annotations: Transaction.addToHistory.of(false) });
+    view.dispatch({ changes: { from, to: from + originalText.length, insert: finalText } });
+  };
+
+  return EditorView.domEventHandlers({
+    mousedown: (e, view) => {
+      if (!e.altKey || e.button !== 0) return false;
+      const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
+      if (pos === null) return false;
+      const t = findScrubTarget(view, pos);
+      if (!t) return false;
+      commit(view);
+      begin(t);
+      const startX = e.clientX;
+      const move = (me: MouseEvent) => apply(view, Math.round((me.clientX - startX) / 6));
+      const up = () => {
+        window.removeEventListener("mousemove", move);
+        commit(view);
+      };
+      window.addEventListener("mousemove", move);
+      window.addEventListener("mouseup", up, { once: true });
+      e.preventDefault();
+      return true;
+    },
+    wheel: (e, view) => {
+      if (!e.altKey) return false;
+      const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
+      if (pos === null) return false;
+      const inSession = session && pos >= session.from && pos <= session.from + session.len;
+      if (!inSession) {
+        commit(view);
+        const t = findScrubTarget(view, pos);
+        if (!t) return false;
+        begin(t);
+      }
+      apply(view, session!.steps + (e.deltaY < 0 ? 1 : -1));
+      clearTimeout(wheelTimer);
+      wheelTimer = setTimeout(() => commit(view), 600);
+      e.preventDefault();
+      return true;
+    },
+    keydown: (e, view) => {
+      if (e.key === "Alt") view.dom.classList.add("ck-alt");
+      return false;
+    },
+    keyup: (e, view) => {
+      if (e.key === "Alt") view.dom.classList.remove("ck-alt");
+      return false;
+    },
+    blur: (_e, view) => {
+      view.dom.classList.remove("ck-alt");
+      return false;
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // answers column
 // ---------------------------------------------------------------------------
 
@@ -309,6 +444,7 @@ export function createEditor(
     sheetField,
     refRenumber,
     operatorAutoRef,
+    scrubbing(),
     EditorView.decorations.compute([sheetField], (s) => getDecos(s).marks),
     EditorView.decorations.compute([sheetField], (s) => getDecos(s).refs),
     EditorView.atomicRanges.of((view) => getDecos(view.state).refs),
