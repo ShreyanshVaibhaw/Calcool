@@ -6,6 +6,8 @@
   "permissions": [
     "core:default",
     "opener:default",
+    "process:default",
+    "updater:default",
     "core:window:allow-hide",
     "core:window:allow-show",
     "core:window:allow-set-focus"

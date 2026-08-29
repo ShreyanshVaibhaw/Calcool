@@ -3,6 +3,14 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import Quick from "./Quick";
 import { setWorkdayConfig, Region } from "./engine/workdays";
+import { applyTheme, initializeTheme, normalizeTheme, THEME_KEY } from "./theme";
+
+initializeTheme();
+
+// Keep the quick-calculator window in sync when the main window changes theme.
+window.addEventListener("storage", (event) => {
+  if (event.key === THEME_KEY) applyTheme(normalizeTheme(event.newValue));
+});
 
 // workday holidays follow the OS locale region until there is a settings UI
 const localeRegion = (): Region => {

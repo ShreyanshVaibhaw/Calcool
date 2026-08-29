@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createEditor, EditorHandle } from "./editor";
 import { loadRates } from "./rates";
+import SettingsDialog from "./SettingsDialog";
+import { readTheme, saveTheme, type ThemeId } from "./theme";
 import "./App.css";
 
 const BOOK_KEY = "calcool.book.v1";
@@ -98,11 +100,18 @@ function dateLabel(ts: number): string {
 function App() {
   const host = useRef<HTMLDivElement>(null);
   const handle = useRef<EditorHandle | null>(null);
+  const settingsDialog = useRef<HTMLDialogElement>(null);
   const [book, setBook] = useState<Book>(loadBook);
   const [total, setTotal] = useState("");
   const [copied, setCopied] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(SIDEBAR_KEY) === "1");
   const [filter, setFilter] = useState("");
+  const [theme, setTheme] = useState<ThemeId>(readTheme);
+
+  const chooseTheme = (nextTheme: ThemeId) => {
+    setTheme(nextTheme);
+    saveTheme(nextTheme);
+  };
 
   useEffect(() => {
     localStorage.setItem(BOOK_KEY, JSON.stringify(book));
@@ -193,9 +202,9 @@ function App() {
     }
   };
 
-  // Ctrl+N new sheet, Ctrl+\ toggle sidebar
-  const actions = useRef({ addSheet, toggle: () => setCollapsed((c) => !c) });
-  actions.current = { addSheet, toggle: () => setCollapsed((c) => !c) };
+  // Ctrl+N creates a sheet, Ctrl+\ toggles the sidebar, and Ctrl+, opens settings.
+  const actions = useRef({ addSheet, toggle: () => setCollapsed((c) => !c), openSettings: () => settingsDialog.current?.showModal() });
+  actions.current = { addSheet, toggle: () => setCollapsed((c) => !c), openSettings: () => settingsDialog.current?.showModal() };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.ctrlKey || e.altKey || e.shiftKey) return;
@@ -205,6 +214,9 @@ function App() {
       } else if (e.key === "\\") {
         e.preventDefault();
         actions.current.toggle();
+      } else if (e.key === ",") {
+        e.preventDefault();
+        actions.current.openSettings();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -259,6 +271,17 @@ function App() {
             ))}
             {visibleSheets.length === 0 && <div className="sheet-empty">No matching sheets</div>}
           </div>
+          <div className="sidebar-footer">
+            <button
+              className="settings-open"
+              type="button"
+              title="Appearance & updates (Ctrl+,)"
+              onClick={() => settingsDialog.current?.showModal()}
+            >
+              <span aria-hidden="true">⚙</span>
+              <span>Appearance & updates</span>
+            </button>
+          </div>
         </aside>
       )}
       {collapsed && (
@@ -272,6 +295,7 @@ function App() {
           {copied ? "copied" : total}
         </button>
       )}
+      <SettingsDialog dialogRef={settingsDialog} theme={theme} onThemeChange={chooseTheme} />
     </div>
   );
 }
