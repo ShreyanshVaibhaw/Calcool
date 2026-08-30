@@ -147,6 +147,17 @@ const GOLDENS: [string, string][] = [
   ["60 fps in Hz", "60 Hz"],
   ["$25 per hour × 14 hours", "$350.00"],
 
+  // cpi inflation (bundled BLS CPI-U table)
+  ["$500 in 1997 worth in 2020", "$806.26"],
+  ["$100 from 1970 worth in 2024", "$808.48"],
+  ["inflation from 1990 to 2000", "31.75%"],
+  ["inflation from 1997 to 2024", "95.44%"],
+
+  // sunrise/sunset (NOAA solar math + city coordinates)
+  ["sunrise in London on December 21 2020", "21 December 2020 at 8:04 am"],
+  ["sunset in New York on June 21 2020", "21 June 2020 at 8:30 pm"],
+  ["sunrise in Tokyo on March 20 2021", "20 March 2021 at 5:47 am"],
+
   // laptimes
   ["03:04:05 + 01:02:03", "04:06:08"],
   ["01:30:00 × 2", "03:00:00"],

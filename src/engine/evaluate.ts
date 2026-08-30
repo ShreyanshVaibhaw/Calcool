@@ -4,6 +4,8 @@ import { addMonths, humanSpan, toEpochDay, fromEpochDay } from "./dates";
 import { epochMinToWall, wallToEpochMin, localZone } from "./times";
 import { addWorkdays, countWorkdays, hoursPerWorkday } from "./workdays";
 import { taxRate } from "./tax";
+import { cpiFor } from "./cpi";
+import { cityCoords, sunTimesUtc } from "./sun";
 import { Node, Target } from "./parse";
 
 export interface EvalEnv {
@@ -697,6 +699,35 @@ export function evalNode(node: Node, env: EvalEnv): Value {
       if (fps.lte(0)) bad();
       const secs = node.secs.plus(new Decimal(node.ff).div(fps));
       return { kind: "quantity", d: secs, unit: unitById("s"), disp: { mode: "laptime" }, fps: fps.toNumber() };
+    }
+    case "cpi": {
+      const a = cpiFor(node.from);
+      const b = cpiFor(node.to);
+      if (!a || !b) return bad();
+      const f = b.div(a);
+      if (!node.c) return P(f.minus(1).mul(100)); // inflation from A to B as a percent
+      const c = evalNode(node.c, env);
+      if (c.kind !== "quantity" && c.kind !== "number") bad();
+      return { ...c, d: c.d.mul(f) };
+    }
+    case "sun": {
+      const coords = cityCoords(node.city);
+      if (!coords) return bad();
+      // no explicit date means today on the city's own calendar
+      let w: { y: number; m: number; d: number };
+      if (node.date) {
+        const dv = evalNode(node.date, env);
+        if (dv.kind !== "date") bad();
+        w = fromEpochDay(dv.d.toNumber());
+      } else {
+        w = epochMinToWall(node.zone, Date.now() / 60000);
+      }
+      const ed = toEpochDay(w);
+      const doy = ed - toEpochDay({ y: w.y, m: 1, d: 1 }) + 1;
+      const t = sunTimesUtc(coords[0], coords[1], doy);
+      if (!t) return bad(); // polar day or night
+      const mins = node.which === "rise" ? t.rise : t.set;
+      return { kind: "time", d: new Decimal(ed * 1440 + Math.round(mins)), zone: node.zone, anchored: true };
     }
     case "tax": {
       const c = evalNode(node.c, env);

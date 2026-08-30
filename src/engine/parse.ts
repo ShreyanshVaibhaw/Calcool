@@ -44,7 +44,9 @@ export type Node =
   | { n: "fin"; op: "ci" | "interest" | "loan" | "cagr"; p: Node; years: Node; rate?: Node; ret?: Node; freq?: number; total?: boolean }
   // sales tax: add = "+ VAT", remove = "- VAT" (divides out included tax), portion = "VAT on"
   | { n: "tax"; mode: "add" | "remove" | "portion"; c: Node }
-  | { n: "tc"; secs: Decimal; ff: number; rate: Node }; // video timecode at a frame rate
+  | { n: "tc"; secs: Decimal; ff: number; rate: Node } // video timecode at a frame rate
+  | { n: "cpi"; c: Node | null; from: number; to: number } // inflation-adjust money (c null: the % change itself)
+  | { n: "sun"; which: "rise" | "set"; city: string; zone: string; date: Node | null };
 
 type Sig =
   | { s: "tax"; from: number; to: number } // the configured sales-tax word (VAT/GST)
@@ -68,7 +70,7 @@ type Sig =
   | { s: "wdfn"; from: number; to: number } // "weekday" / "day of the week"
   | { s: "clock"; mins: number; from: number; to: number } // 7:30, 4pm, noon (no date yet)
   | { s: "timeval"; epochMin: number; zone?: string; from: number; to: number } // anchored instant
-  | { s: "zone"; zone: string; from: number; to: number }
+  | { s: "zone"; zone: string; w?: string; from: number; to: number } // w: the matched city word, for coordinates
   | { s: "ampm"; pm: boolean; from: number; to: number }
   | { s: "lp"; from: number; to: number }
   | { s: "rp"; from: number; to: number }
@@ -80,6 +82,7 @@ const KWS = new Set([
   // finance phrases
   "interest", "compounding", "compounded", "repayment", "repayments", "payment", "payments", "over",
   "annual", "annually", "annualized", "yearly", "monthly", "weekly", "daily", "quarterly", "return", "invested", "returned",
+  "worth", "inflation", "sunrise", "sunset",
 ]);
 export const AGGS = new Set(["total", "sum", "average", "avg", "count", "median"]);
 const FNS = new Set([
@@ -267,7 +270,7 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
     if (nextW) {
       const zp = lookupZonePair(lower, nextW.toLowerCase());
       if (zp) {
-        S({ s: "zone", zone: zp, from: t.from, to: next!.to });
+        S({ s: "zone", zone: zp, w: `${lower} ${nextW.toLowerCase()}`, from: t.from, to: next!.to });
         M(t.from, next!.to, "unit");
         i += 2;
         continue;
@@ -417,7 +420,7 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
     }
     const zone = lookupZoneWord(w);
     if (zone) {
-      S({ s: "zone", zone, from: t.from, to: t.to });
+      S({ s: "zone", zone, w: lower, from: t.from, to: t.to });
       M(t.from, t.to, "unit");
       i++;
       continue;
@@ -640,6 +643,10 @@ function parseSlice(sigIn: Sig[]): Node | null {
     }
   }
 
+  // sun phrases keep their trailing "on <date>", so they scan before the annotation strip
+  const sunNode = sunScans(sig);
+  if (sunNode) return sunNode;
+
   // -- time and date phrases
   sig = stripDateAnnotations(sig);
 
@@ -668,6 +675,8 @@ function parseSlice(sigIn: Sig[]): Node | null {
   if (taxNode) return taxNode;
   const finNode = financeScans(sig);
   if (finNode) return finNode;
+  const cpiNode = cpiScans(sig);
+  if (cpiNode) return cpiNode;
 
   const timeNode = timeScans(sig);
   if (timeNode) return timeNode;
@@ -722,6 +731,58 @@ function taxScans(sig: Sig[]): Node | null {
     if (c) return { n: "tax", mode: "portion", c };
   }
   return null;
+}
+
+const yearTok = (t: Sig | undefined): number | null => (t?.s === "num" && t.d.isInteger() && t.d.gte(1900) && t.d.lte(2100) ? t.d.toNumber() : null);
+
+// "$500 in 1997 worth today" / "inflation since 1997" / "inflation from 1990 to 2000"
+function cpiScans(sig: Sig[]): Node | null {
+  const nowYear = new Date().getFullYear();
+
+  if (isKw(sig[0], "inflation") && (isKw(sig[1], "from") || isKw(sig[1], "since"))) {
+    const a = yearTok(sig[2]);
+    if (a !== null) {
+      if (sig.length === 3) return { n: "cpi", c: null, from: a, to: nowYear };
+      const b = yearTok(sig[4]);
+      if (sig.length === 5 && isKw(sig[3], "to") && b !== null) return { n: "cpi", c: null, from: a, to: b };
+    }
+    return null;
+  }
+
+  const dep = depths(sig);
+  for (let w = sig.length - 1; w > 2; w--) {
+    if (!isKw(sig[w], "worth") || dep[w] !== 0) continue;
+    const from = yearTok(sig[w - 1]);
+    if (from === null || !(isKw(sig[w - 2], "in") || isKw(sig[w - 2], "from"))) return null;
+    const money = parseSlice(sig.slice(0, w - 2));
+    if (!money) return null;
+    let rest = sig.slice(w + 1);
+    if (isKw(rest[0], "in")) rest = rest.slice(1);
+    let to: number | null = null;
+    if (rest.length === 0) to = nowYear;
+    else if (rest.length === 1 && rest[0].s === "num") to = yearTok(rest[0]);
+    else if (rest.length === 1 && rest[0].s === "dateval") to = fromEpochDay(rest[0].ed).y;
+    if (to === null) return null;
+    return { n: "cpi", c: money, from, to };
+  }
+  return null;
+}
+
+// "sunrise in Tokyo" / "sunset in Paris on June 21" / "sunrise in Sydney tomorrow"
+function sunScans(sig: Sig[]): Node | null {
+  const which = isKw(sig[0], "sunrise") ? "rise" : isKw(sig[0], "sunset") ? "set" : null;
+  if (!which) return null;
+  let zone: Extract<Sig, { s: "zone" }> | null = null;
+  let date: Node | null = null;
+  for (let i = 1; i < sig.length; i++) {
+    const t = sig[i];
+    if (t.s === "zone" && !zone) zone = t;
+    else if (t.s === "dateval" && !date) date = { n: "value", v: { kind: "date", d: new Decimal(t.ed) } };
+    else if (t.s === "kw" && (t.kw === "in" || t.kw === "at" || t.kw === "on")) continue;
+    else return null;
+  }
+  if (!zone?.w) return null;
+  return { n: "sun", which, city: zone.w, zone: zone.zone, date };
 }
 
 // compounds/payments per year for finance phrases
