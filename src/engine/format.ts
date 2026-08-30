@@ -1,4 +1,5 @@
 import { Decimal, Unit, Value } from "./value";
+import { unitById } from "./units";
 import { MONTH_NAMES, fromEpochDay, todayEpoch, toEpochDay, weekdayName } from "./dates";
 import { epochMinToWall, localZone } from "./times";
 
@@ -75,6 +76,25 @@ function unitLabel(u: Unit, d: Decimal): string {
   return s;
 }
 
+// imperial units that display their fraction as a smaller unit: 12.5 ft -> 12 ft 6 in
+const AUTO_SUB: Record<string, string> = { ft: "inch", lb: "oz", stone: "lb" };
+
+function compoundStr(d: Decimal, big: Unit, sub: Unit, maxDp: number): string {
+  const sign = d.isNeg() ? "-" : "";
+  const abs = d.abs();
+  let whole = abs.floor();
+  let rem = abs.minus(whole).mul(big.factor).div(sub.factor).toDecimalPlaces(maxDp);
+  if (rem.gte(big.factor.div(sub.factor))) {
+    // remainder rounded up to a full big unit: carry
+    whole = whole.plus(1);
+    rem = new Decimal(0);
+  }
+  const bigS = `${groupFixed(whole.toFixed())} ${unitLabel(big, whole)}`;
+  if (rem.isZero()) return sign + bigS;
+  const remS = `${trimZeros(rem.toFixed())} ${unitLabel(sub, rem)}`;
+  return sign + (whole.isZero() ? remS : `${bigS} ${remS}`);
+}
+
 function currencyStr(d: Decimal, unit: Unit, allowSi = true): string {
   if (allowSi) {
     const c = siCompact(d);
@@ -117,6 +137,8 @@ export function formatValue(v: Value): string {
         return parts.length ? parts.join(" ") : "0 days";
       }
       if (v.unit.category === "currency") return currencyStr(v.d, v.unit, disp.dp === undefined);
+      const subId = disp.sub ?? (!disp.plain && disp.dp === undefined && AUTO_SUB[v.unit.id] && !v.d.isInteger() ? AUTO_SUB[v.unit.id] : undefined);
+      if (subId) return compoundStr(v.d, v.unit, unitById(subId), disp.dp ?? 2);
       const dNum = formatDecimal(v.d, { maxDp: disp.dp ?? 2, si: false });
       return `${dNum} ${unitLabel(v.unit, v.d)}`;
     }

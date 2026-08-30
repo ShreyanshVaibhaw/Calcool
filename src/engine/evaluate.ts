@@ -1,4 +1,4 @@
-import { CalcError, Decimal, Unit, Value } from "./value";
+import { CalcError, Decimal, Disp, Unit, Value } from "./value";
 import { areaUnitFor, volumeUnit, unitById } from "./units";
 import { addMonths, humanSpan, toEpochDay, fromEpochDay } from "./dates";
 import { epochMinToWall, wallToEpochMin, localZone } from "./times";
@@ -448,9 +448,11 @@ function applyFn(name: string, args: Value[]): Value {
 export function convertValue(v: Value, t: Target): Value {
   switch (t.k) {
     case "unit": {
+      // asking for a unit by name means decimal display, unless a remainder unit was named too
+      const uDisp: Disp = t.sub ? { sub: t.sub.id } : { plain: true };
       if (v.kind === "quantity") {
         if (v.unit.category === "duration" && t.unit.category === "duration") return Q(durationConvert(v, t.unit), t.unit);
-        if (v.unit.category === t.unit.category) return Q(convertQty(v.d, v.unit, t.unit), t.unit);
+        if (v.unit.category === t.unit.category) return { ...Q(convertQty(v.d, v.unit, t.unit), t.unit), disp: uDisp };
         bad();
       }
       if (v.kind === "rate") {

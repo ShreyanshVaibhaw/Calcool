@@ -70,6 +70,20 @@ const GOLDENS: [string, string][] = [
   // units
   ["10 km in m", "10,000 m"],
   ["100 pounds in kg", "45.36 kg"],
+
+  // compound imperial
+  ["3' 4\" + 9' 2\"", "12 ft 6 in"],
+  ["12 feet 6 inches", "12 ft 6 in"],
+  ["5'6\" in cm", "167.64 cm"],
+  ["6 ft 2 inches in cm", "187.96 cm"],
+  ["13.5 lb", "13 lb 8 oz"],
+  ["13.5 lb in lb and oz", "13 lb 8 oz"],
+  ["13.5 lb in lb", "13.5 lb"],
+  ["190 cm in feet and inches", "6 ft 2.8 in"],
+  ["190 cm in ft", "6.23 ft"],
+  ["90 kg in stone and lb", "14 stone 2.42 lb"],
+  ["2 stone 3 lb in kg", "14.06 kg"],
+  ["5.999999 ft + 0 ft", "6 ft"],
   ["65 kg in pounds", "143.3 lb"],
   ["1km + 1,000m", "2 km"],
   ["300 + 20 km", "320 km"],

@@ -35,6 +35,7 @@ npm run tauri build  # release build; installers land in src-tauri/target/releas
 - Arithmetic incl. word operators, `2.5k`/`5M` multipliers, `1e3`, `0xFF`/`0b`/`0o`, thousands separators
 - Every common percent phrase: `10% of 200`, `200 - 10%`, `20 is what % of 160`, `180 is 10% off what`, `50 to 75 is what %`
 - Units with conversion and assimilation: length, mass, duration, temperature, data, speed, area, volume, angle
+- Compound imperial units: `3' 4" + 9' 2"` gives `12 ft 6 in`, `5'6" in cm`, `12 feet 6 inches`, `13.5 lb` shows as `13 lb 8 oz`, `190 cm in feet and inches`, `90 kg in stone and lb`. Asking for a single unit (`in ft`) keeps the plain decimal
 - Currency with hourly-cached live rates (open.er-api.com) and an offline fallback table
 - Rates: `$25/hour × 14 hours`, `$500 at $20/hour`, `90 km / 3 days`
 - Variables (`rent = $1,450`, multi-word names), `total`/`average` lines, headings, labels, `//` and `#` comments
@@ -48,4 +49,4 @@ npm run tauri build  # release build; installers land in src-tauri/target/releas
 
 ## Next (see SPEC.md for the full list)
 
-Compound imperial units, finance phrases, settings (quick-popup hotkey, workday region, hours per workday), real files instead of localStorage for the sheetbook.
+Finance phrases, settings (quick-popup hotkey, workday region, hours per workday), real files instead of localStorage for the sheetbook.

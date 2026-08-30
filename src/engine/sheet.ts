@@ -29,8 +29,8 @@ interface Masked {
 function maskComments(line: string): Masked {
   const spans: { from: number; to: number }[] = [];
 
-  // "quoted text" is commentary
-  const quoteRe = /"[^"]*"/g;
+  // "quoted text" is commentary; a quote glued to a digit is an inch mark (3' 4"), not a quote
+  const quoteRe = /(?<!\d)"[^"]*"/g;
   let m: RegExpExecArray | null;
   while ((m = quoteRe.exec(line))) spans.push({ from: m.index, to: m.index + m[0].length });
 

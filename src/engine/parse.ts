@@ -18,7 +18,7 @@ export interface Env {
 }
 
 export type Target =
-  | { k: "unit"; unit: Unit }
+  | { k: "unit"; unit: Unit; sub?: Unit } // sub: "in feet and inches" compound display
   | { k: "rate"; num: Unit; den: Unit }
   | { k: "fmt"; fmt: string }
   | { k: "dp"; n: number }
@@ -646,6 +646,13 @@ function parseTarget(toks: Sig[]): Target | null {
   if (toks.length === 3 && a.s === "unit" && isOp(toks[1], "/") && toks[2].s === "unit") {
     return { k: "rate", num: a.unit, den: toks[2].unit };
   }
+  // "feet and inches" / "lb and oz": big unit with a smaller same-category remainder
+  if (toks.length === 3 && a.s === "unit" && isKw(toks[1], "and") && toks[2].s === "unit") {
+    const b = toks[2] as Extract<Sig, { s: "unit" }>;
+    if (b.unit.category === a.unit.category && b.unit.factor.lt(a.unit.factor)) {
+      return { k: "unit", unit: a.unit, sub: b.unit };
+    }
+  }
   return null;
 }
 
@@ -809,11 +816,16 @@ function parseNumberish(sig: Sig[], pos: number, currencyUnit: Unit | null): PE 
     if (isDur) addCal(d, unit);
     for (;;) {
       const n2 = sig[p];
+      if (n2?.s !== "num") break;
       const u2 = sig[p + 1];
-      if (n2?.s === "num" && u2?.s === "unit" && u2.unit.category === unit.category) {
-        base = base.plus(n2.d.mul(u2.unit.factor));
-        if (isDur) addCal(n2.d, u2.unit);
-        if (u2.unit.factor.gt(bigUnit.factor)) bigUnit = u2.unit;
+      let next: Unit | null = null;
+      if (u2?.s === "unit") next = u2.unit;
+      // glued suffix units fold too (5' 6", 5h 30min) - but never multiplier lookalikes like 3k
+      else if (u2?.s === "aff" && !/^(k|m|b|t|bn|tn|mn)$/i.test(u2.w)) next = lookupUnitWord(u2.w);
+      if (next && next.category === unit.category) {
+        base = base.plus(n2.d.mul(next.factor));
+        if (isDur) addCal(n2.d, next);
+        if (next.factor.gt(bigUnit.factor)) bigUnit = next;
         p += 2;
       } else break;
     }

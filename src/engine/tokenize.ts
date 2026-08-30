@@ -133,6 +133,13 @@ export function tokenize(line: string): RawTok[] {
       continue;
     }
 
+    // 5'6" imperial shorthand: quote marks count as unit words only when glued to a number
+    if ((c === "'" || c === '"') && lastEnd === i && toks[toks.length - 1]?.t === "num") {
+      push({ t: "word", w: c, from: i, to: i + 1, att: true });
+      i++;
+      continue;
+    }
+
     i++; // anything else: skip the character
   }
   return toks;

@@ -33,6 +33,8 @@ export interface Disp {
   mode?: "hex" | "bin" | "oct" | "sci" | "fraction" | "weekday" | "span" | "hm";
   dp?: number;
   span?: { y: number; m: number; w: number; d: number }; // humanized date distance
+  sub?: string; // compound imperial display: unit id of the remainder ("6 ft 2 in")
+  plain?: boolean; // explicit unit conversion: suppress the automatic compound display
 }
 
 // durations remember their calendar parts so "3 months 5 days" applies to dates correctly
