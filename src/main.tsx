@@ -1,28 +1,28 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { invoke } from "@tauri-apps/api/core";
 import App from "./App";
 import Quick from "./Quick";
-import { setWorkdayConfig, Region } from "./engine/workdays";
+import { applySettings, loadSettings, SETTINGS_KEY } from "./settings";
 import { applyTheme, initializeTheme, normalizeTheme, THEME_KEY } from "./theme";
 
 initializeTheme();
+applySettings();
 
-// Keep the quick-calculator window in sync when the main window changes theme.
+// Keep the quick-calculator window in sync when the main window changes theme or settings.
 window.addEventListener("storage", (event) => {
   if (event.key === THEME_KEY) applyTheme(normalizeTheme(event.newValue));
+  if (event.key === SETTINGS_KEY) applySettings();
 });
-
-// workday holidays follow the OS locale region until there is a settings UI
-const localeRegion = (): Region => {
-  const tag = (navigator.language || "").split("-").pop()?.toUpperCase();
-  if (tag === "IN") return "IN";
-  if (tag === "GB" || tag === "UK") return "UK";
-  return "US";
-};
-setWorkdayConfig({ region: localeRegion() });
 
 const isQuick = new URLSearchParams(window.location.search).has("quick");
 if (isQuick) document.body.classList.add("quick-body");
+
+// a saved quick-popup hotkey overrides the startup candidate chain (no-op in the browser)
+if (!isQuick) {
+  const hk = loadSettings().hotkey;
+  if (hk) invoke("set_hotkey", { accel: hk }).catch(() => {});
+}
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>{isQuick ? <Quick /> : <App />}</React.StrictMode>,

@@ -543,6 +543,53 @@ body {
   white-space: nowrap;
 }
 
+.calc-settings {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--sep);
+}
+
+.calc-settings h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 168px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.setting-row label {
+  font-size: 13px;
+}
+
+.setting-row select,
+.setting-row input {
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--sep);
+  border-radius: 7px;
+  padding: 6px 9px;
+  outline: none;
+}
+
+.setting-row select:focus,
+.setting-row input:focus {
+  border-color: var(--accent);
+}
+
+.setting-hint {
+  margin: 2px 0 10px;
+  font-size: 11.5px;
+  color: var(--prose);
+}
+
 .update-panel {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

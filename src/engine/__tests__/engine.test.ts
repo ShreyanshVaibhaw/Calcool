@@ -3,6 +3,7 @@ import { evaluateSheet } from "../sheet";
 import { formatValue } from "../format";
 import { todayEpoch, nearestWeekday } from "../dates";
 import { setWorkdayConfig } from "../workdays";
+import { setTaxConfig } from "../tax";
 import { Decimal } from "../value";
 
 const line = (input: string): string => evaluateSheet(input).lines[0].formatted;
@@ -95,6 +96,9 @@ const GOLDENS: [string, string][] = [
   ["yearly repayment on $10,000 over 6 years at 6%", "$2,033.63"],
   ["annual return on $1,000 invested $2,500 returned after 7 years", "13.99%"],
   ["total of 3, 4, 7 and 9", "23"],
+  ["$300 + VAT", "$345.00"],
+  ["$300 - VAT", "$260.87"],
+  ["VAT on $300", "$45.00"],
   ["65 kg in pounds", "143.3 lb"],
   ["1km + 1,000m", "2 km"],
   ["300 + 20 km", "320 km"],
@@ -138,6 +142,15 @@ describe("golden single lines", () => {
       expect(line(input)).toBe(expected);
     });
   }
+});
+
+describe("configurable sales tax", () => {
+  test("renamed tax word and rate apply", () => {
+    setTaxConfig({ name: "GST", rate: 18 });
+    expect(line("$100 + GST")).toBe("$118.00");
+    expect(line("$300 + VAT")).toBe("$300.00"); // old word is plain prose again, word-skipped
+    setTaxConfig({ name: "VAT", rate: 15 });
+  });
 });
 
 describe("lines that must stay silent", () => {

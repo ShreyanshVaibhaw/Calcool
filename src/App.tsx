@@ -330,7 +330,7 @@ function App() {
           {copied ? "copied" : total}
         </button>
       )}
-      <SettingsDialog dialogRef={settingsDialog} theme={theme} onThemeChange={chooseTheme} />
+      <SettingsDialog dialogRef={settingsDialog} theme={theme} onThemeChange={chooseTheme} onEngineChange={() => handle.current?.refresh()} />
     </div>
   );
 }

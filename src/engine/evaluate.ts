@@ -3,6 +3,7 @@ import { areaUnitFor, volumeUnit, unitById } from "./units";
 import { addMonths, humanSpan, toEpochDay, fromEpochDay } from "./dates";
 import { epochMinToWall, wallToEpochMin, localZone } from "./times";
 import { addWorkdays, countWorkdays, hoursPerWorkday } from "./workdays";
+import { taxRate } from "./tax";
 import { Node, Target } from "./parse";
 
 export interface EvalEnv {
@@ -628,6 +629,13 @@ export function evalNode(node: Node, env: EvalEnv): Value {
       }
       const fv = pV.d.mul(new Decimal(1).plus(rp).pow(n));
       return money(node.op === "interest" ? fv.minus(pV.d) : fv);
+    }
+    case "tax": {
+      const c = evalNode(node.c, env);
+      if (c.kind !== "quantity" && c.kind !== "number") bad();
+      const f = new Decimal(1).plus(taxRate().div(100));
+      const d = node.mode === "add" ? c.d.mul(f) : node.mode === "remove" ? c.d.div(f) : c.d.mul(taxRate().div(100));
+      return { ...c, d };
     }
   }
   return bad();

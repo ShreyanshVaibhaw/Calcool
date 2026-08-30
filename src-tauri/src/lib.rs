@@ -1,6 +1,31 @@
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
+// Alt+Space is often owned by launchers (Flow Launcher, PowerToys Run); fall through until one sticks
+const HOTKEY_CANDIDATES: [&str; 5] = ["Alt+Space", "Ctrl+Alt+Space", "Alt+Shift+Space", "Ctrl+Shift+Space", "Alt+Q"];
+
+// Register the chosen quick-popup hotkey; empty or unregisterable falls back to the
+// candidate chain. Returns what actually got registered so the UI can report it.
+#[tauri::command]
+fn set_hotkey(app: tauri::AppHandle, accel: String) -> Option<String> {
+    let gs = app.global_shortcut();
+    let _ = gs.unregister_all();
+    if !accel.is_empty() {
+        if gs.register(accel.as_str()).is_ok() {
+            eprintln!("[quick] registered {accel} (settings)");
+            return Some(accel);
+        }
+        eprintln!("[quick] {accel} failed (settings), falling back to the chain");
+    }
+    for candidate in HOTKEY_CANDIDATES {
+        if gs.register(candidate).is_ok() {
+            eprintln!("[quick] registered {candidate} (fallback)");
+            return Some(candidate.to_string());
+        }
+    }
+    None
+}
+
 fn toggle_quick(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("quick") {
         let vis = w.is_visible().unwrap_or(false);
@@ -34,11 +59,10 @@ pub fn run() {
                 })
                 .build(),
         )
+        .invoke_handler(tauri::generate_handler![set_hotkey])
         .setup(|app| {
-            // Alt+Space first; if something like PowerToys Run owns it, fall back
-            // Alt+Space is often owned by launchers like PowerToys Run; fall through until one sticks
             let gs = app.global_shortcut();
-            for candidate in ["Alt+Space", "Ctrl+Alt+Space", "Alt+Shift+Space", "Ctrl+Shift+Space", "Alt+Q"] {
+            for candidate in HOTKEY_CANDIDATES {
                 match gs.register(candidate) {
                     Ok(()) => {
                         eprintln!("[quick] registered {candidate}");

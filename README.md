@@ -39,6 +39,8 @@ npm run tauri build  # release build; installers land in src-tauri/target/releas
 - Currency with hourly-cached live rates (open.er-api.com) and an offline fallback table
 - Rates: `$25/hour × 14 hours`, `$500 at $20/hour`, `90 km / 3 days`
 - Finance phrases: compound interest (`$1,000 after 3 years at 7%`, `compounding monthly`, `interest on $1k after 3 years @ 7%`), loan repayments (`monthly repayment on $10,000 over 6 years at 6%`, `total`/`yearly`/`weekly` variants), and annualized return (`annual return on $1,000 invested $2,500 returned after 7 years`)
+- Sales tax with a configurable word and rate (default VAT at 15%): `$300 + VAT` gives `$345.00`, `VAT on $300` gives the tax portion, and `$300 - VAT` divides included tax back out (`$260.87`)
+- Settings (Ctrl+,): theme, workday holiday region, hours per workday, sales-tax word and rate, quick-popup hotkey picker - calculation changes re-evaluate open sheets immediately
 - Variables (`rent = $1,450`, multi-word names), `total`/`average` lines, headings, labels, `//` and `#` comments
 - Live reference tokens: `lineN` renders as a pill showing the referenced answer; double-click an answer (or drag it into a line) to insert one, Ctrl+\ references the nearest answer above, and typing an operator on an empty line auto-references the previous answer. Tokens renumber themselves when lines are added or removed; deleting a referenced line breaks its tokens loudly (struck-through pill) instead of silently repointing them
 - Scrubbable numbers: hold Alt and drag any number sideways (or Alt+scroll) to change it live and watch every dependent line follow. Steps by the number's last decimal place, keeps digit grouping, and a whole drag is one undo
@@ -50,4 +52,4 @@ npm run tauri build  # release build; installers land in src-tauri/target/releas
 
 ## Next (see SPEC.md for the full list)
 
-Settings (quick-popup hotkey, workday region, hours per workday, sales-tax name and rate), real files instead of localStorage for the sheetbook.
+Real files instead of localStorage for the sheetbook.

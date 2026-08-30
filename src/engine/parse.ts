@@ -4,6 +4,7 @@ import { lookupUnitWord, lookupTwoWord, currencyBySymbol } from "./units";
 import { MONTHS, WDAYS, todayEpoch, toEpochDay, fromEpochDay, nearestWeekday, daysInMonth, holiday } from "./dates";
 import { lookupZoneWord, lookupZonePair, localZone, wallToEpochMin, epochMinToWall, offsetMin } from "./times";
 import { unitById } from "./units";
+import { taxName } from "./tax";
 
 export interface SemTok {
   from: number;
@@ -40,9 +41,12 @@ export type Node =
   | { n: "wdname"; c: Node } // weekday of a date
   // finance: ci/interest = compound interest (freq = compounds per year), loan = amortized
   // repayment (freq = payments per year, total = whole-term sum), cagr = annualized return
-  | { n: "fin"; op: "ci" | "interest" | "loan" | "cagr"; p: Node; years: Node; rate?: Node; ret?: Node; freq?: number; total?: boolean };
+  | { n: "fin"; op: "ci" | "interest" | "loan" | "cagr"; p: Node; years: Node; rate?: Node; ret?: Node; freq?: number; total?: boolean }
+  // sales tax: add = "+ VAT", remove = "- VAT" (divides out included tax), portion = "VAT on"
+  | { n: "tax"; mode: "add" | "remove" | "portion"; c: Node };
 
 type Sig =
+  | { s: "tax"; from: number; to: number } // the configured sales-tax word (VAT/GST)
   | { s: "num"; d: Decimal; base?: number; from: number; to: number }
   | { s: "unit"; unit: Unit; from: number; to: number }
   | { s: "aff"; w: string; from: number; to: number } // word glued onto a number: 3k, 10m, 16th
@@ -307,6 +311,12 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
       const idx = parseInt(refMatch[1], 10) - 1;
       S({ s: "ref", idx, from: t.from, to: t.to });
       sem.push({ from: base + t.from, to: base + t.to, type: "ref", ref: idx });
+      i++;
+      continue;
+    }
+    if (lower === taxName()) {
+      S({ s: "tax", from: t.from, to: t.to });
+      M(t.from, t.to, "keyword");
       i++;
       continue;
     }
@@ -602,6 +612,8 @@ function parseSlice(sigIn: Sig[]): Node | null {
     }
   }
 
+  const taxNode = taxScans(sig);
+  if (taxNode) return taxNode;
   const finNode = financeScans(sig);
   if (finNode) return finNode;
 
@@ -635,6 +647,24 @@ function parseSlice(sigIn: Sig[]): Node | null {
   if (sig.length === 0) return null;
 
   return runSplit(sig);
+}
+
+// "$300 + VAT" / "$300 - VAT" (divides out included tax) / "VAT on $300" (the tax portion)
+function taxScans(sig: Sig[]): Node | null {
+  const dep = depths(sig);
+  const n = sig.length;
+  if (n >= 3 && sig[n - 1].s === "tax" && dep[n - 1] === 0) {
+    const o = sig[n - 2];
+    if (o.s === "op" && (o.op === "+" || o.op === "-") && dep[n - 2] === 0) {
+      const c = parseSlice(sig.slice(0, n - 2));
+      if (c) return { n: "tax", mode: o.op === "+" ? "add" : "remove", c };
+    }
+  }
+  if (n >= 3 && sig[0].s === "tax" && isKw(sig[1], "on")) {
+    const c = parseSlice(sig.slice(2));
+    if (c) return { n: "tax", mode: "portion", c };
+  }
+  return null;
 }
 
 // compounds/payments per year for finance phrases
