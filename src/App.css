@@ -321,6 +321,19 @@ body {
   text-overflow: ellipsis;
 }
 
+.sheet-rename {
+  width: 100%;
+  font-family: var(--font);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 1px 6px;
+  outline: none;
+}
+
 .sheet-meta {
   font-size: 11.5px;
   color: var(--prose);

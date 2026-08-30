@@ -47,6 +47,7 @@ time difference between London and Tokyo
 interface Sheet {
   id: string;
   text: string;
+  name?: string; // user rename; overrides the first-line title
   created: number;
   modified: number;
 }
@@ -106,6 +107,7 @@ function App() {
   const [copied, setCopied] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(SIDEBAR_KEY) === "1");
   const [filter, setFilter] = useState("");
+  const [renamingId, setRenamingId] = useState<string | null>(null);
   const [theme, setTheme] = useState<ThemeId>(readTheme);
 
   const chooseTheme = (nextTheme: ThemeId) => {
@@ -181,7 +183,7 @@ function App() {
     const sheet = book.sheets.find((s) => s.id === id);
     if (!sheet) return;
     const currentText = id === book.activeId ? (handle.current?.getDoc() ?? sheet.text) : sheet.text;
-    if (currentText.trim() && !window.confirm(`Delete "${sheetTitle(currentText)}"?`)) return;
+    if (currentText.trim() && !window.confirm(`Delete "${sheet.name || sheetTitle(currentText)}"?`)) return;
 
     const stash = captureStash();
     const rest = book.sheets.filter((s) => s.id !== id);
@@ -200,6 +202,13 @@ function App() {
       const t = fresh ?? rest[0];
       handle.current?.setDoc(t.text, t.id);
     }
+  };
+
+  const renameSheet = (id: string, raw: string) => {
+    const name = raw.trim();
+    // empty name reverts to the auto title from the first line
+    setBook((prev) => ({ ...prev, sheets: prev.sheets.map((s) => (s.id === id ? { ...s, name: name || undefined } : s)) }));
+    setRenamingId(null);
   };
 
   // Ctrl+N creates a sheet, Ctrl+\ toggles the sidebar, and Ctrl+, opens settings.
@@ -226,7 +235,7 @@ function App() {
   const visibleSheets = useMemo(() => {
     const list = [...book.sheets].sort((a, b) => b.modified - a.modified);
     const q = filter.trim().toLowerCase();
-    return q ? list.filter((s) => s.text.toLowerCase().includes(q)) : list;
+    return q ? list.filter((s) => s.text.toLowerCase().includes(q) || (s.name ?? "").toLowerCase().includes(q)) : list;
   }, [book.sheets, filter]);
 
   const copyTotal = () => {
@@ -255,7 +264,33 @@ function App() {
                 className={"sheet-item" + (s.id === book.activeId ? " active" : "")}
                 onClick={() => selectSheet(s.id)}
               >
-                <div className="sheet-title">{sheetTitle(s.id === book.activeId ? (handle.current?.getDoc() ?? s.text) : s.text)}</div>
+                {renamingId === s.id ? (
+                  <input
+                    className="sheet-rename"
+                    defaultValue={s.name ?? ""}
+                    placeholder={sheetTitle(s.text)}
+                    autoFocus
+                    onFocus={(e) => e.currentTarget.select()}
+                    onClick={(e) => e.stopPropagation()}
+                    onBlur={(e) => renameSheet(s.id, e.currentTarget.value)}
+                    onKeyDown={(e) => {
+                      // Escape restores the old name so the blur commit is a no-op
+                      if (e.key === "Escape") e.currentTarget.value = s.name ?? "";
+                      if (e.key === "Enter" || e.key === "Escape") e.currentTarget.blur();
+                    }}
+                  />
+                ) : (
+                  <div
+                    className="sheet-title"
+                    title="Double-click to rename"
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      setRenamingId(s.id);
+                    }}
+                  >
+                    {s.name || sheetTitle(s.id === book.activeId ? (handle.current?.getDoc() ?? s.text) : s.text)}
+                  </div>
+                )}
                 <div className="sheet-meta">{dateLabel(s.modified)}</div>
                 <button
                   className="sheet-del"

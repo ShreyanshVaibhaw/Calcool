@@ -30,7 +30,7 @@ npm run tauri build  # release build; installers land in src-tauri/target/releas
 ## Works today
 
 - Live per-line answers, word skipping, syntax highlighting, click-to-copy, quick total pill, autosave
-- Multi-sheet sidebar: sheetbook store, titles from the first line, most-recent-first, search, Ctrl+N new sheet, Ctrl+\ toggle, delete with a 20-entry trash kept in the store for recovery
+- Multi-sheet sidebar: sheetbook store, titles from the first line, double-click a title to rename (empty reverts to auto), most-recent-first, search matches text and names, Ctrl+N new sheet, Ctrl+\ toggle, delete with a 20-entry trash kept in the store for recovery
 - Quick popup on a global hotkey: Alt+Space, falling back through Ctrl+Alt+Space / Alt+Shift+Space / Ctrl+Shift+Space / Alt+Q when a launcher owns the earlier ones (Flow Launcher and PowerToys Run both squat on Alt+Space). One-line calculator, always on top; Enter copies the answer and closes, Esc or losing focus closes. Bare entries auto-convert QuickSoulver-style: `21 miles` answers `33.8 km`, `31 C` answers `87.8 °F`, foreign currency answers in USD
 - Arithmetic incl. word operators, `2.5k`/`5M` multipliers, `1e3`, `0xFF`/`0b`/`0o`, thousands separators
 - Every common percent phrase: `10% of 200`, `200 - 10%`, `20 is what % of 160`, `180 is 10% off what`, `50 to 75 is what %`
