@@ -145,6 +145,18 @@ export function binop(op: string, l: Value, r: Value): Value {
           const m3 = toBase(lenArea.area.d as Decimal, lenArea.area.unit as Unit).mul(toBase(lenArea.len.d as Decimal, lenArea.len.unit as Unit));
           return Q(fromBase(m3.mul(1000), volumeUnit()), volumeUnit()); // m³ -> liters base
         }
+        // power × time = energy: 5 kW × 3 hours = 15 kWh
+        const powDur =
+          l.unit.category === "power" && r.unit.category === "duration"
+            ? { p: l, t: r }
+            : l.unit.category === "duration" && r.unit.category === "power"
+              ? { p: r, t: l }
+              : null;
+        if (powDur) {
+          const joules = toBase(powDur.p.d as Decimal, powDur.p.unit as Unit).mul(toBase(powDur.t.d as Decimal, powDur.t.unit as Unit));
+          const eu = unitById(joules.abs().gte(3.6e6) ? "kWh" : joules.abs().gte(3600) ? "Wh" : "J");
+          return Q(fromBase(joules, eu), eu);
+        }
         return bad();
       }
       if (l.kind === "rate" && r.kind === "number") return R(l.d.mul(r.d), l.num, l.den);
@@ -173,11 +185,23 @@ export function binop(op: string, l: Value, r: Value): Value {
       if (l.kind === "number" && r.kind === "quantity") return R(l.d.div(rz(r.d)), null, r.unit);
       if (l.kind === "quantity" && r.kind === "quantity") {
         if (l.unit.category === r.unit.category) return N(toBase(l.d, l.unit).div(rz(toBase(r.d, r.unit))));
+        // energy ÷ time = power, energy ÷ power = time
+        if (l.unit.category === "energy" && r.unit.category === "duration") {
+          const watts = toBase(l.d, l.unit).div(rz(toBase(r.d, r.unit)));
+          const pu = unitById(watts.abs().gte(1000) ? "kW" : "W");
+          return Q(fromBase(watts, pu), pu);
+        }
+        if (l.unit.category === "energy" && r.unit.category === "power") {
+          const secs = toBase(l.d, l.unit).div(rz(toBase(r.d, r.unit)));
+          const du = unitById(secs.abs().gte(3600) ? "h" : secs.abs().gte(60) ? "min" : "s");
+          return Q(fromBase(secs, du), du);
+        }
         return R(l.d.div(rz(r.d)), l.unit, r.unit); // 90 km / 3 days = 30 km/day
       }
-      if (l.kind === "quantity" && r.kind === "rate" && l.unit.category === "currency" && r.num?.category === "currency") {
-        const amount = convertQty(l.d, l.unit, r.num);
-        return Q(amount.div(rz(r.d)), r.den); // $500 / ($20/hour) = 25 hours
+      if (l.kind === "quantity" && r.kind === "rate" && r.num && l.unit.category === r.num.category) {
+        // $500 / ($20/hour) = 25 hours; 3 GB / (10 MB/s) = 300 seconds
+        const amount = l.unit.category === "duration" ? durationConvert(l, r.num) : convertQty(l.d, l.unit, r.num);
+        return Q(amount.div(rz(r.d)), r.den);
       }
       if (l.kind === "rate" && r.kind === "number") return R(l.d.div(rz(r.d)), l.num, l.den);
       return bad();
@@ -224,7 +248,7 @@ export function binop(op: string, l: Value, r: Value): Value {
     case "at": {
       if (l.kind === "quantity" && r.kind === "rate") {
         if (l.unit.category === r.den.category) return binop("*", l, r); // 30 hours at $30/hour
-        if (l.unit.category === "currency" && r.num?.category === "currency") return binop("/", l, r); // $500 at $20/hour
+        if (r.num && l.unit.category === r.num.category) return binop("/", l, r); // $500 at $20/hour; 3 GB at 10 MB/s
       }
       return bad();
     }
@@ -454,6 +478,15 @@ export function convertValue(v: Value, t: Target): Value {
       if (v.kind === "quantity") {
         if (v.unit.category === "duration" && t.unit.category === "duration") return Q(durationConvert(v, t.unit), t.unit);
         if (v.unit.category === t.unit.category) return { ...Q(convertQty(v.d, v.unit, t.unit), t.unit), disp: uDisp };
+        // a substance density bridges mass and volume: 300g butter in cups
+        if (v.dens) {
+          if (v.unit.category === "mass" && t.unit.category === "volume") {
+            return { ...Q(fromBase(toBase(v.d, v.unit).div(v.dens), t.unit), t.unit), disp: uDisp }; // kg / (kg/l) = l
+          }
+          if (v.unit.category === "volume" && t.unit.category === "mass") {
+            return { ...Q(fromBase(toBase(v.d, v.unit).mul(v.dens), t.unit), t.unit), disp: uDisp };
+          }
+        }
         bad();
       }
       if (v.kind === "rate") {
@@ -504,6 +537,11 @@ export function convertValue(v: Value, t: Target): Value {
         case "oct":
         case "sci":
           if (v.kind === "number") return { ...v, disp: { ...v.disp, mode: t.fmt } };
+          bad();
+          break;
+        case "pitch":
+          // 440 hz as pitch = A4
+          if (v.kind === "quantity" && v.unit.category === "frequency" && v.d.gt(0)) return { ...v, disp: { ...v.disp, mode: "pitch" } };
           bad();
           break;
       }

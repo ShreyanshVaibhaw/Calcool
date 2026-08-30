@@ -1,6 +1,6 @@
 import { Decimal, Unit, Value, CalcError } from "./value";
 import { tokenize } from "./tokenize";
-import { lookupUnitWord, lookupTwoWord, currencyBySymbol } from "./units";
+import { lookupUnitWord, lookupTwoWord, lookupSubstance, currencyBySymbol } from "./units";
 import { MONTHS, WDAYS, todayEpoch, toEpochDay, fromEpochDay, nearestWeekday, daysInMonth, holiday } from "./dates";
 import { lookupZoneWord, lookupZonePair, localZone, wallToEpochMin, epochMinToWall, offsetMin } from "./times";
 import { unitById } from "./units";
@@ -47,6 +47,7 @@ export type Node =
 
 type Sig =
   | { s: "tax"; from: number; to: number } // the configured sales-tax word (VAT/GST)
+  | { s: "subst"; dens: Decimal; from: number; to: number } // cooking substance (butter, flour...)
   | { s: "num"; d: Decimal; base?: number; from: number; to: number }
   | { s: "unit"; unit: Unit; from: number; to: number }
   | { s: "aff"; w: string; from: number; to: number } // word glued onto a number: 3k, 10m, 16th
@@ -82,7 +83,7 @@ const FNS = new Set([
   "sqrt", "cbrt", "abs", "round", "ceil", "floor", "fact", "factorial", "ln", "log", "log2", "log10", "exp",
   "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "sind", "cosd", "tand", "min", "max",
 ]);
-const FMTS = new Set(["hex", "hexadecimal", "binary", "bin", "octal", "oct", "decimal", "dec", "number", "num", "fraction", "percent", "percentage", "sci", "scientific"]);
+const FMTS = new Set(["hex", "hexadecimal", "binary", "bin", "octal", "oct", "decimal", "dec", "number", "num", "fraction", "percent", "percentage", "sci", "scientific", "pitch"]);
 const PI = new Decimal("3.141592653589793238462643383279503");
 const CONSTS: Record<string, Decimal> = {
   pi: PI,
@@ -317,6 +318,13 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
     if (lower === taxName()) {
       S({ s: "tax", from: t.from, to: t.to });
       M(t.from, t.to, "keyword");
+      i++;
+      continue;
+    }
+    const dens = lookupSubstance(lower);
+    if (dens) {
+      S({ s: "subst", dens, from: t.from, to: t.to });
+      M(t.from, t.to, "unit");
       i++;
       continue;
     }
@@ -963,6 +971,12 @@ function parseNumberish(sig: Sig[], pos: number, currencyUnit: Unit | null): PE 
     }
     const v: Value = { kind: "quantity", d: base.div(bigUnit.factor), unit: bigUnit };
     if (isDur) v.cal = { months: calMonths, days: calDays };
+    // "300g butter" / "2 cups flour": the substance carries its density for mass<->volume
+    const sub = sig[p];
+    if (sub?.s === "subst" && (bigUnit.category === "mass" || bigUnit.category === "volume")) {
+      v.dens = sub.dens;
+      p++;
+    }
     return { node: { n: "value", v }, pos: p };
   }
 

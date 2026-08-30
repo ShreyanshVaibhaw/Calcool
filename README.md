@@ -34,7 +34,10 @@ npm run tauri build  # release build; installers land in src-tauri/target/releas
 - Quick popup on a global hotkey: Alt+Space, falling back through Ctrl+Alt+Space / Alt+Shift+Space / Ctrl+Shift+Space / Alt+Q when a launcher owns the earlier ones (Flow Launcher and PowerToys Run both squat on Alt+Space). One-line calculator, always on top; Enter copies the answer and closes, Esc or losing focus closes. Bare entries auto-convert QuickSoulver-style: `21 miles` answers `33.8 km`, `31 C` answers `87.8 °F`, foreign currency answers in USD
 - Arithmetic incl. word operators, `2.5k`/`5M` multipliers, `1e3`, `0xFF`/`0b`/`0o`, thousands separators
 - Every common percent phrase: `10% of 200`, `200 - 10%`, `20 is what % of 160`, `180 is 10% off what`, `50 to 75 is what %`
-- Units with conversion and assimilation: length, mass, duration, temperature, data, speed, area, volume, angle
+- Units with conversion and assimilation: length, mass, duration, temperature, data, speed, area, volume, angle, energy, power, pressure, force, frequency, CSS px and points
+- Cross-unit physics: `5 kW × 3 hours` gives `15 kWh`, `15 kWh / 5 kW` gives `3 hours`, and any quantity divides by a matching rate - `3 GB at 10 MB/s in minutes` gives `5 min`
+- Cooking densities: `300g butter in cups`, `2 cups flour in grams` (water, milk, butter, flour, sugar, honey, oil, rice, oats, cocoa, salt, cream, yogurt)
+- Music pitch: `440 hz as pitch` gives `A4`
 - Compound imperial units: `3' 4" + 9' 2"` gives `12 ft 6 in`, `5'6" in cm`, `12 feet 6 inches`, `13.5 lb` shows as `13 lb 8 oz`, `190 cm in feet and inches`, `90 kg in stone and lb`. Asking for a single unit (`in ft`) keeps the plain decimal
 - Currency with hourly-cached live rates (open.er-api.com) and an offline fallback table
 - Rates: `$25/hour × 14 hours`, `$500 at $20/hour`, `90 km / 3 days`
@@ -53,4 +56,4 @@ npm run tauri build  # release build; installers land in src-tauri/target/releas
 
 ## Next (see SPEC.md for the full list)
 
-The P0-P2 roadmap is shipped. Remaining SPEC ideas: energy/power/pressure units, custom units, cooking densities, laptimes, CPI inflation data.
+The P0-P2 roadmap is shipped. Remaining SPEC ideas: custom units, laptimes, fuel economy, CPI inflation data.

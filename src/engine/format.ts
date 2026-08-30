@@ -136,6 +136,12 @@ export function formatValue(v: Value): string {
         push(disp.span.d, "day");
         return parts.length ? parts.join(" ") : "0 days";
       }
+      if (disp.mode === "pitch" && v.unit.category === "frequency") {
+        const hz = v.d.mul(v.unit.factor).toNumber();
+        const n = Math.round(12 * Math.log2(hz / 440)); // semitones from A4
+        const NOTE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+        return NOTE[(((n + 9) % 12) + 12) % 12] + (4 + Math.floor((n + 9) / 12));
+      }
       if (v.unit.category === "currency") return currencyStr(v.d, v.unit, disp.dp === undefined);
       const subId = disp.sub ?? (!disp.plain && disp.dp === undefined && AUTO_SUB[v.unit.id] && !v.d.isInteger() ? AUTO_SUB[v.unit.id] : undefined);
       if (subId) return compoundStr(v.d, v.unit, unitById(subId), disp.dp ?? 2);

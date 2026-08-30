@@ -25,6 +25,10 @@ const DEFS: Def[] = [
   { id: "yd", cat: "length", factor: 0.9144, symbol: "yd", names: ["yd", "yard", "yards"] },
   { id: "mi", cat: "length", factor: 1609.344, symbol: "mi", names: ["mi", "mile", "miles"] },
   { id: "nmi", cat: "length", factor: 1852, symbol: "nmi", names: ["nmi", "nautical mile", "nautical miles"] },
+  // CSS reference pixel (96/in) and typographic point (72/in)
+  { id: "px", cat: "length", factor: D("0.0254").div(96), symbol: "px", names: ["px", "pixel", "pixels"] },
+  // "pt" itself is claimed by the Pacific timezone, so the point goes by name
+  { id: "pt", cat: "length", factor: D("0.0254").div(72), symbol: "pt", names: ["point", "points"] },
 
   // mass, base kilogram
   { id: "mg", cat: "mass", factor: 1e-6, symbol: "mg", names: ["mg", "milligram", "milligrams"] },
@@ -97,6 +101,45 @@ const DEFS: Def[] = [
   { id: "tbsp", cat: "volume", factor: 0.01478676478125, symbol: "tbsp", names: ["tbsp", "tablespoon", "tablespoons"] },
   { id: "tsp", cat: "volume", factor: 0.00492892159375, symbol: "tsp", names: ["tsp", "teaspoon", "teaspoons"] },
   { id: "floz", cat: "volume", factor: 0.0295735295625, symbol: "fl oz", names: ["floz", "fl oz", "fluid ounce", "fluid ounces"] },
+
+  // energy, base joule
+  { id: "J", cat: "energy", factor: 1, symbol: "J", exact: ["J"], names: ["joule", "joules"] },
+  { id: "kJ", cat: "energy", factor: 1e3, symbol: "kJ", exact: ["kJ"], names: ["kj", "kilojoule", "kilojoules"] },
+  { id: "MJ", cat: "energy", factor: 1e6, symbol: "MJ", exact: ["MJ"], names: ["mj", "megajoule", "megajoules"] },
+  { id: "cal", cat: "energy", factor: 4.184, symbol: "cal", names: ["cal", "calorie", "calories"] },
+  { id: "kcal", cat: "energy", factor: 4184, symbol: "kcal", names: ["kcal", "kilocalorie", "kilocalories"] },
+  { id: "Wh", cat: "energy", factor: 3600, symbol: "Wh", exact: ["Wh"], names: ["wh", "watt hour", "watt hours"] },
+  { id: "kWh", cat: "energy", factor: 3.6e6, symbol: "kWh", exact: ["kWh"], names: ["kwh", "kilowatt hour", "kilowatt hours"] },
+  { id: "MWh", cat: "energy", factor: 3.6e9, symbol: "MWh", exact: ["MWh"], names: ["mwh", "megawatt hour", "megawatt hours"] },
+  { id: "BTU", cat: "energy", factor: 1055.05585262, symbol: "BTU", names: ["btu", "btus"] },
+
+  // power, base watt
+  { id: "W", cat: "power", factor: 1, symbol: "W", exact: ["W"], names: ["watt", "watts"] },
+  { id: "kW", cat: "power", factor: 1e3, symbol: "kW", exact: ["kW"], names: ["kw", "kilowatt", "kilowatts"] },
+  { id: "MW", cat: "power", factor: 1e6, symbol: "MW", exact: ["MW"], names: ["megawatt", "megawatts"] },
+  { id: "GW", cat: "power", factor: 1e9, symbol: "GW", exact: ["GW"], names: ["gw", "gigawatt", "gigawatts"] },
+  { id: "hp", cat: "power", factor: 745.69987158227022, symbol: "hp", names: ["hp", "horsepower"] },
+
+  // pressure, base pascal
+  { id: "Pa", cat: "pressure", factor: 1, symbol: "Pa", exact: ["Pa"], names: ["pa", "pascal", "pascals"] },
+  { id: "kPa", cat: "pressure", factor: 1e3, symbol: "kPa", exact: ["kPa"], names: ["kpa", "kilopascal", "kilopascals"] },
+  { id: "MPa", cat: "pressure", factor: 1e6, symbol: "MPa", exact: ["MPa"], names: ["mpa", "megapascal", "megapascals"] },
+  { id: "bar", cat: "pressure", factor: 1e5, symbol: "bar", names: ["bar", "bars"] },
+  { id: "psi", cat: "pressure", factor: 6894.757293168, symbol: "psi", names: ["psi"] },
+  { id: "atm", cat: "pressure", factor: 101325, symbol: "atm", names: ["atm", "atmosphere", "atmospheres"] },
+  { id: "mmHg", cat: "pressure", factor: 133.322387415, symbol: "mmHg", names: ["mmhg"] },
+
+  // force, base newton ("kn" stays knots, so kilonewton is case-sensitive)
+  { id: "N", cat: "force", factor: 1, symbol: "N", exact: ["N"], names: ["newton", "newtons"] },
+  { id: "kN", cat: "force", factor: 1e3, symbol: "kN", exact: ["kN"], names: ["kilonewton", "kilonewtons"] },
+  { id: "lbf", cat: "force", factor: 4.4482216152605, symbol: "lbf", names: ["lbf"] },
+
+  // frequency, base hertz
+  { id: "Hz", cat: "frequency", factor: 1, symbol: "Hz", names: ["hz", "hertz"] },
+  { id: "kHz", cat: "frequency", factor: 1e3, symbol: "kHz", names: ["khz", "kilohertz"] },
+  { id: "MHz", cat: "frequency", factor: 1e6, symbol: "MHz", names: ["mhz", "megahertz"] },
+  { id: "GHz", cat: "frequency", factor: 1e9, symbol: "GHz", names: ["ghz", "gigahertz"] },
+  { id: "rpm", cat: "frequency", factor: D(1).div(60), symbol: "rpm", names: ["rpm"] },
 
   // angle, base radian
   { id: "rad", cat: "angle", factor: 1, symbol: "rad", names: ["rad", "radian", "radians"] },
@@ -203,6 +246,28 @@ export function unitById(id: string): Unit {
   const u = byId.get(id) ?? currencyUnits.get(id);
   if (!u) throw new Error(`unknown unit ${id}`);
   return u;
+}
+
+// cooking densities in g/ml (= kg/l), for "300g butter in cups"
+const SUBSTANCES: Record<string, number> = {
+  water: 1,
+  milk: 1.03,
+  butter: 0.911,
+  flour: 0.53,
+  sugar: 0.845,
+  honey: 1.42,
+  oil: 0.92,
+  rice: 0.85,
+  oats: 0.41,
+  cocoa: 0.52,
+  salt: 1.217,
+  cream: 1.01,
+  yogurt: 1.03,
+};
+
+export function lookupSubstance(word: string): Decimal | null {
+  const d = SUBSTANCES[word.toLowerCase()];
+  return d === undefined ? null : D(d);
 }
 
 export function lookupUnitWord(word: string): Unit | null {

@@ -99,6 +99,38 @@ const GOLDENS: [string, string][] = [
   ["$300 + VAT", "$345.00"],
   ["$300 - VAT", "$260.87"],
   ["VAT on $300", "$45.00"],
+
+  // energy, power, pressure, force, frequency
+  ["500 kcal in kJ", "2,092 kJ"],
+  ["1 kWh in MJ", "3.6 MJ"],
+  ["5 kW × 3 hours", "15 kWh"],
+  ["60 W × 30 minutes", "30 Wh"],
+  ["15 kWh / 3 hours", "5 kW"],
+  ["15 kWh / 5 kW", "3 hours"],
+  ["150 hp in kW", "111.85 kW"],
+  ["32 psi in bar", "2.21 bar"],
+  ["1 atm in kPa", "101.33 kPa"],
+  ["500 N in lbf", "112.4 lbf"],
+  ["2.4 GHz in MHz", "2,400 MHz"],
+  ["3000 rpm in Hz", "50 Hz"],
+  ["440 hz as pitch", "A4"],
+  ["261.63 Hz as pitch", "C4"],
+  ["880 hz as pitch", "A5"],
+
+  // css lengths
+  ["1 cm in px", "37.8 px"],
+  ["1 inch in points", "72 pt"],
+  ["24 px in points", "18 pt"],
+
+  // cooking densities
+  ["300g butter in cups", "1.39 cups"],
+  ["2 cups flour in grams", "250.78 g"],
+  ["500 ml milk in g", "515 g"],
+
+  // download time via generic quantity-at-rate
+  ["3 GB at 10 MB/s", "300 s"],
+  ["3 GB at 10 MB/s in minutes", "5 min"],
+  ["700 MB / (25 MB/s)", "28 s"],
   ["65 kg in pounds", "143.3 lb"],
   ["1km + 1,000m", "2 km"],
   ["300 + 20 km", "320 km"],

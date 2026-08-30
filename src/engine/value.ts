@@ -15,6 +15,11 @@ export type UnitCategory =
   | "area"
   | "volume"
   | "angle"
+  | "energy"
+  | "power"
+  | "pressure"
+  | "force"
+  | "frequency"
   | "currency";
 
 export interface Unit {
@@ -30,7 +35,7 @@ export interface Unit {
 
 // Display hints attached by "as hex", "to 2 dp" etc. They change rendering, not the value.
 export interface Disp {
-  mode?: "hex" | "bin" | "oct" | "sci" | "fraction" | "weekday" | "span" | "hm";
+  mode?: "hex" | "bin" | "oct" | "sci" | "fraction" | "weekday" | "span" | "hm" | "pitch";
   dp?: number;
   span?: { y: number; m: number; w: number; d: number }; // humanized date distance
   sub?: string; // compound imperial display: unit id of the remainder ("6 ft 2 in")
@@ -46,7 +51,7 @@ export interface CalParts {
 export type Value =
   | { kind: "number"; d: Decimal; disp?: Disp }
   | { kind: "percent"; d: Decimal; disp?: Disp } // 10% -> d = 10
-  | { kind: "quantity"; d: Decimal; unit: Unit; disp?: Disp; cal?: CalParts; range?: { a: number; b: number } } // range: the epoch days a date-span came from
+  | { kind: "quantity"; d: Decimal; unit: Unit; disp?: Disp; cal?: CalParts; range?: { a: number; b: number }; dens?: Decimal } // range: date-span epoch days; dens: substance g/ml for mass<->volume
   | { kind: "rate"; d: Decimal; num: Unit | null; den: Unit; disp?: Disp } // $/hour, km/day, 30/week
   | { kind: "date"; d: Decimal; disp?: Disp } // d = epoch day (days since 1970-01-01)
   | { kind: "time"; d: Decimal; zone?: string; anchored?: boolean; disp?: Disp }; // d = epoch minutes; anchored = tied to a real date/zone
