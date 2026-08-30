@@ -132,6 +132,21 @@ const GOLDENS: [string, string][] = [
   ["3 GB at 10 MB/s in minutes", "5 min"],
   ["700 MB / (25 MB/s)", "28 s"],
 
+  // fuel economy
+  ["30 mpg in l/100km", "7.84 l/100km"],
+  ["8 l/100km in mpg", "29.4 mpg"],
+  ["500 miles / 20 gallons in mpg", "25 mpg"],
+  ["5.5 l per 100 km in mpg", "42.77 mpg"],
+  ["30 mpg in km/l", "12.75 km/l"],
+
+  // video timecode
+  ["00:30:10:00 @ 24 fps in frames", "43,440"],
+  ["00:00:01:12 @ 24 fps in frames", "36"],
+  ["01:00:00:00 at 30 fps in frames", "108,000"],
+  ["00:30:10:00 @ 24 fps in minutes", "30.17 min"],
+  ["60 fps in Hz", "60 Hz"],
+  ["$25 per hour × 14 hours", "$350.00"],
+
   // laptimes
   ["03:04:05 + 01:02:03", "04:06:08"],
   ["01:30:00 × 2", "03:00:00"],

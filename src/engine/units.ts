@@ -12,6 +12,7 @@ interface Def {
   names?: string[]; // case-insensitive names
   dp?: number;
   prefix?: boolean;
+  recip?: boolean;
 }
 
 const DEFS: Def[] = [
@@ -140,6 +141,12 @@ const DEFS: Def[] = [
   { id: "MHz", cat: "frequency", factor: 1e6, symbol: "MHz", names: ["mhz", "megahertz"] },
   { id: "GHz", cat: "frequency", factor: 1e9, symbol: "GHz", names: ["ghz", "gigahertz"] },
   { id: "rpm", cat: "frequency", factor: D(1).div(60), symbol: "rpm", names: ["rpm"] },
+  { id: "fps", cat: "frequency", factor: 1, symbol: "fps", names: ["fps"] },
+
+  // fuel economy, base km/l; l/100km is reciprocal (base = 100 / v)
+  { id: "kmpl", cat: "fuel", factor: 1, symbol: "km/l", names: ["kmpl"] },
+  { id: "mpg", cat: "fuel", factor: D("1.609344").div("3.785411784"), symbol: "mpg", names: ["mpg"] },
+  { id: "l100km", cat: "fuel", factor: 100, recip: true, symbol: "l/100km", names: ["l100km"] },
 
   // angle, base radian
   { id: "rad", cat: "angle", factor: 1, symbol: "rad", names: ["rad", "radian", "radians"] },
@@ -198,6 +205,7 @@ const units: Unit[] = DEFS.map((d) => ({
   factor: D(d.factor),
   offset: d.offset === undefined ? undefined : D(d.offset),
   symbol: d.symbol,
+  recip: d.recip,
 }));
 
 const currencyUnits = new Map<string, Unit>();

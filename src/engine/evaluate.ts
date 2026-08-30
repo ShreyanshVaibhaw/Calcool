@@ -15,8 +15,8 @@ const bad = (): never => {
   throw new CalcError("cannot evaluate");
 };
 
-export const toBase = (d: Decimal, u: Unit): Decimal => d.plus(u.offset ?? 0).mul(u.factor);
-export const fromBase = (b: Decimal, u: Unit): Decimal => b.div(u.factor).minus(u.offset ?? 0);
+export const toBase = (d: Decimal, u: Unit): Decimal => (u.recip ? new Decimal(u.factor).div(d) : d.plus(u.offset ?? 0).mul(u.factor));
+export const fromBase = (b: Decimal, u: Unit): Decimal => (u.recip ? new Decimal(u.factor).div(b) : b.div(u.factor).minus(u.offset ?? 0));
 
 const N = (d: Decimal): Value => ({ kind: "number", d });
 const P = (d: Decimal): Value => ({ kind: "percent", d });
@@ -97,6 +97,7 @@ export function binop(op: string, l: Value, r: Value): Value {
           return Q(sign === 1 ? lv.plus(r.d) : lv.minus(r.d), r.unit);
         }
         const target = l.unit.factor.gte(r.unit.factor) ? l.unit : r.unit; // larger unit wins
+        if (l.unit.recip || r.unit.recip) bad(); // summing l/100km figures is nonsense
         const b = sign === 1 ? toBase(l.d, l.unit).plus(toBase(r.d, r.unit)) : toBase(l.d, l.unit).minus(toBase(r.d, r.unit));
         const res = Q(fromBase(b, target), target);
         // laptime arithmetic keeps the H:MM:SS face
@@ -498,6 +499,17 @@ export function convertValue(v: Value, t: Target): Value {
           const mps = v.d.mul(v.num.factor).div(v.den.factor);
           return Q(fromBase(mps, t.unit), t.unit);
         }
+        // fuel economy from a plain rate: "500 miles / 20 gallons in mpg", "7.84 l / 100 km in mpg"
+        if (t.unit.category === "fuel" && v.num) {
+          if (v.num.category === "length" && v.den.category === "volume") {
+            const kmpl = v.d.mul(v.num.factor.div(1000)).div(v.den.factor); // meters->km per liter
+            return Q(fromBase(kmpl, t.unit), t.unit);
+          }
+          if (v.num.category === "volume" && v.den.category === "length") {
+            const kmpl = v.den.factor.div(1000).div(v.d.mul(v.num.factor));
+            return Q(fromBase(kmpl, t.unit), t.unit);
+          }
+        }
         bad();
       }
       if (v.kind === "number") return Q(v.d, t.unit);
@@ -545,6 +557,13 @@ export function convertValue(v: Value, t: Target): Value {
         case "pitch":
           // 440 hz as pitch = A4
           if (v.kind === "quantity" && v.unit.category === "frequency" && v.d.gt(0)) return { ...v, disp: { ...v.disp, mode: "pitch" } };
+          bad();
+          break;
+        case "frames":
+          // a timecode remembers its frame rate: 00:30:10:00 @ 24 fps in frames
+          if (v.kind === "quantity" && v.unit.category === "duration" && v.fps) {
+            return { kind: "number", d: toBase(v.d, v.unit).mul(v.fps).round(), disp: { dp: 0 } };
+          }
           bad();
           break;
       }
@@ -670,6 +689,14 @@ export function evalNode(node: Node, env: EvalEnv): Value {
       }
       const fv = pV.d.mul(new Decimal(1).plus(rp).pow(n));
       return money(node.op === "interest" ? fv.minus(pV.d) : fv);
+    }
+    case "tc": {
+      // HH:MM:SS:FF at a frame rate becomes a duration that can render back to frames
+      const rateV = evalNode(node.rate, env);
+      const fps = rateV.kind === "quantity" && rateV.unit.category === "frequency" ? rateV.d.mul(rateV.unit.factor) : rateV.kind === "number" ? rateV.d : bad();
+      if (fps.lte(0)) bad();
+      const secs = node.secs.plus(new Decimal(node.ff).div(fps));
+      return { kind: "quantity", d: secs, unit: unitById("s"), disp: { mode: "laptime" }, fps: fps.toNumber() };
     }
     case "tax": {
       const c = evalNode(node.c, env);

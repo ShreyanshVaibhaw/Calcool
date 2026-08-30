@@ -20,6 +20,7 @@ export type UnitCategory =
   | "pressure"
   | "force"
   | "frequency"
+  | "fuel"
   | "currency";
 
 export interface Unit {
@@ -28,6 +29,7 @@ export interface Unit {
   // value_in_base = (v + offset) * factor. Offset only used by temperature.
   factor: Decimal;
   offset?: Decimal;
+  recip?: boolean; // reciprocal unit: base = factor / v (l/100km against a km/l base)
   symbol: string;
   dp?: number; // currency display decimals
   prefix?: boolean; // currency symbol before the number
@@ -51,7 +53,7 @@ export interface CalParts {
 export type Value =
   | { kind: "number"; d: Decimal; disp?: Disp }
   | { kind: "percent"; d: Decimal; disp?: Disp } // 10% -> d = 10
-  | { kind: "quantity"; d: Decimal; unit: Unit; disp?: Disp; cal?: CalParts; range?: { a: number; b: number }; dens?: Decimal } // range: date-span epoch days; dens: substance g/ml for mass<->volume
+  | { kind: "quantity"; d: Decimal; unit: Unit; disp?: Disp; cal?: CalParts; range?: { a: number; b: number }; dens?: Decimal; fps?: number } // range: date-span epoch days; dens: substance g/ml; fps: timecode frame rate
   | { kind: "rate"; d: Decimal; num: Unit | null; den: Unit; disp?: Disp } // $/hour, km/day, 30/week
   | { kind: "date"; d: Decimal; disp?: Disp } // d = epoch day (days since 1970-01-01)
   | { kind: "time"; d: Decimal; zone?: string; anchored?: boolean; disp?: Disp }; // d = epoch minutes; anchored = tied to a real date/zone

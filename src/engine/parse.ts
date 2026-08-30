@@ -43,12 +43,14 @@ export type Node =
   // repayment (freq = payments per year, total = whole-term sum), cagr = annualized return
   | { n: "fin"; op: "ci" | "interest" | "loan" | "cagr"; p: Node; years: Node; rate?: Node; ret?: Node; freq?: number; total?: boolean }
   // sales tax: add = "+ VAT", remove = "- VAT" (divides out included tax), portion = "VAT on"
-  | { n: "tax"; mode: "add" | "remove" | "portion"; c: Node };
+  | { n: "tax"; mode: "add" | "remove" | "portion"; c: Node }
+  | { n: "tc"; secs: Decimal; ff: number; rate: Node }; // video timecode at a frame rate
 
 type Sig =
   | { s: "tax"; from: number; to: number } // the configured sales-tax word (VAT/GST)
   | { s: "subst"; dens: Decimal; from: number; to: number } // cooking substance (butter, flour...)
   | { s: "lap"; secs: Decimal; from: number; to: number } // laptime literal 03:04:05, a duration
+  | { s: "tc"; secs: Decimal; ff: number; from: number; to: number } // timecode HH:MM:SS:FF, waits for a frame rate
   | { s: "num"; d: Decimal; base?: number; from: number; to: number }
   | { s: "unit"; unit: Unit; from: number; to: number }
   | { s: "aff"; w: string; from: number; to: number } // word glued onto a number: 3k, 10m, 16th
@@ -84,7 +86,7 @@ const FNS = new Set([
   "sqrt", "cbrt", "abs", "round", "ceil", "floor", "fact", "factorial", "ln", "log", "log2", "log10", "exp",
   "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "sind", "cosd", "tand", "min", "max",
 ]);
-const FMTS = new Set(["hex", "hexadecimal", "binary", "bin", "octal", "oct", "decimal", "dec", "number", "num", "fraction", "percent", "percentage", "sci", "scientific", "pitch"]);
+const FMTS = new Set(["hex", "hexadecimal", "binary", "bin", "octal", "oct", "decimal", "dec", "number", "num", "fraction", "percent", "percentage", "sci", "scientific", "pitch", "frames"]);
 const PI = new Decimal("3.141592653589793238462643383279503");
 const CONSTS: Record<string, Decimal> = {
   pi: PI,
@@ -449,6 +451,14 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
     if (isAmpmTok(sig[k + 5])) continue; // 3:04:05 pm stays a clock time
     if (c.d.gte(60) || e1.d.gte(60)) continue;
     const secs = a.d.mul(3600).plus(c.d.mul(60)).plus(e1.d);
+    // a fourth part makes it a video timecode: 00:30:10:00 (frames resolved once a rate appears)
+    const d2 = sig[k + 5];
+    const e2 = sig[k + 6];
+    if (d2?.s === "op" && d2.op === ":" && e2?.s === "num" && e2.d.isInteger() && e1.d.isInteger() && e2.d.lt(1000)) {
+      sig.splice(k, 7, { s: "tc", secs, ff: e2.d.toNumber(), from: a.from, to: e2.to });
+      M(a.from, e2.to, "number");
+      continue;
+    }
     sig.splice(k, 5, { s: "lap", secs, from: a.from, to: e1.to });
     M(a.from, e1.to, "number");
   }
@@ -648,6 +658,12 @@ function parseSlice(sigIn: Sig[]): Node | null {
     }
   }
 
+  // video timecode paired with its frame rate: 00:30:10:00 @ 24 fps
+  if (sig[0]?.s === "tc" && isKw(sig[1], "at")) {
+    const rate = parseSlice(sig.slice(2));
+    if (rate) return { n: "tc", secs: sig[0].secs, ff: sig[0].ff, rate };
+  }
+
   const taxNode = taxScans(sig);
   if (taxNode) return taxNode;
   const finNode = financeScans(sig);
@@ -669,6 +685,11 @@ function parseSlice(sigIn: Sig[]): Node | null {
       if (prev?.s === "kw" && (prev.kw === "in" || prev.kw === "to" || prev.kw === "as" || prev.kw === "into")) {
         stripped.push(t);
       }
+      continue;
+    }
+    if (t.s === "kw" && t.kw === "per") {
+      // "5.5 l per 100 km", "$25 per hour": per is division
+      stripped.push({ s: "op", op: "/", spacedL: true, from: t.from, to: t.to });
       continue;
     }
     if (t.s === "kw" && STRIP.has(t.kw)) {
@@ -810,6 +831,23 @@ function parseTarget(toks: Sig[]): Target | null {
   if (toks.length === 2) {
     if (isKw(a, "nearest") && toks[1].s === "num") return { k: "nearest", m: toks[1].d };
     if (a.s === "num" && (isKw(toks[1], "dp") || isKw(toks[1], "digits"))) return { k: "dp", n: a.d.toNumber() };
+  }
+  // fuel economy targets: "in km/l" and "in l/100km" (before the generic rate rule)
+  if (toks.length === 3 && a.s === "unit" && isOp(toks[1], "/") && toks[2].s === "unit" && a.unit.id === "km" && toks[2].unit.id === "l") {
+    return { k: "unit", unit: unitById("kmpl") };
+  }
+  // glued "100km" arrives as a num + affix, so resolve either shape
+  const unitOf = (t: Sig | undefined): Unit | null => (t?.s === "unit" ? t.unit : t?.s === "aff" ? lookupUnitWord(t.w) : null);
+  if (
+    toks.length === 4 &&
+    a.s === "unit" &&
+    a.unit.id === "l" &&
+    (isOp(toks[1], "/") || isKw(toks[1], "per")) &&
+    toks[2].s === "num" &&
+    toks[2].d.eq(100) &&
+    unitOf(toks[3])?.id === "km"
+  ) {
+    return { k: "unit", unit: unitById("l100km") };
   }
   if (toks.length === 3 && a.s === "unit" && isOp(toks[1], "/") && toks[2].s === "unit") {
     return { k: "rate", num: a.unit, den: toks[2].unit };
