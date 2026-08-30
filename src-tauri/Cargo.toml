@@ -1,6 +1,6 @@
 [package]
 name = "calcool"
-version = "0.1.6"
+version = "0.1.7"
 description = "A natural-language notepad calculator"
 authors = ["Shreyansh"]
 edition = "2021"
