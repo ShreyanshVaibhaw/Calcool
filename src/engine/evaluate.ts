@@ -600,6 +600,35 @@ export function evalNode(node: Node, env: EvalEnv): Value {
       if (c.kind !== "date") bad();
       return { kind: "date", d: (c as Extract<Value, { kind: "date" }>).d, disp: { mode: "weekday" } };
     }
+    case "fin": {
+      const yearsV = evalNode(node.years, env);
+      const t =
+        yearsV.kind === "quantity" && yearsV.unit.category === "duration"
+          ? yearsV.d.mul(yearsV.unit.factor).div(unitById("year").factor)
+          : yearsV.kind === "number"
+            ? yearsV.d
+            : bad();
+      if (t.lte(0)) bad();
+      const pV = evalNode(node.p, env);
+      if (pV.kind !== "quantity" && pV.kind !== "number") bad();
+      const money = (d: Decimal): Value => (pV.kind === "quantity" ? { kind: "quantity", d, unit: pV.unit } : { kind: "number", d });
+      if (node.op === "cagr") {
+        const rV = evalNode(node.ret!, env);
+        if (rV.kind !== "quantity" && rV.kind !== "number") bad();
+        return { kind: "percent", d: rV.d.div(pV.d).pow(new Decimal(1).div(t)).minus(1).mul(100) };
+      }
+      const rateV = evalNode(node.rate!, env);
+      if (rateV.kind !== "percent") bad();
+      const freq = new Decimal(node.freq ?? 1);
+      const rp = rateV.d.div(100).div(freq); // rate per period
+      const n = t.mul(freq); // number of periods
+      if (node.op === "loan") {
+        const pay = rp.isZero() ? pV.d.div(n) : pV.d.mul(rp).div(new Decimal(1).minus(new Decimal(1).plus(rp).pow(n.neg())));
+        return money(node.total ? pay.mul(n) : pay);
+      }
+      const fv = pV.d.mul(new Decimal(1).plus(rp).pow(n));
+      return money(node.op === "interest" ? fv.minus(pV.d) : fv);
+    }
   }
   return bad();
 }

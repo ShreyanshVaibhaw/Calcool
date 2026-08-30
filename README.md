@@ -38,6 +38,7 @@ npm run tauri build  # release build; installers land in src-tauri/target/releas
 - Compound imperial units: `3' 4" + 9' 2"` gives `12 ft 6 in`, `5'6" in cm`, `12 feet 6 inches`, `13.5 lb` shows as `13 lb 8 oz`, `190 cm in feet and inches`, `90 kg in stone and lb`. Asking for a single unit (`in ft`) keeps the plain decimal
 - Currency with hourly-cached live rates (open.er-api.com) and an offline fallback table
 - Rates: `$25/hour × 14 hours`, `$500 at $20/hour`, `90 km / 3 days`
+- Finance phrases: compound interest (`$1,000 after 3 years at 7%`, `compounding monthly`, `interest on $1k after 3 years @ 7%`), loan repayments (`monthly repayment on $10,000 over 6 years at 6%`, `total`/`yearly`/`weekly` variants), and annualized return (`annual return on $1,000 invested $2,500 returned after 7 years`)
 - Variables (`rent = $1,450`, multi-word names), `total`/`average` lines, headings, labels, `//` and `#` comments
 - Live reference tokens: `lineN` renders as a pill showing the referenced answer; double-click an answer (or drag it into a line) to insert one, Ctrl+\ references the nearest answer above, and typing an operator on an empty line auto-references the previous answer. Tokens renumber themselves when lines are added or removed; deleting a referenced line breaks its tokens loudly (struck-through pill) instead of silently repointing them
 - Scrubbable numbers: hold Alt and drag any number sideways (or Alt+scroll) to change it live and watch every dependent line follow. Steps by the number's last decimal place, keeps digit grouping, and a whole drag is one undo
@@ -49,4 +50,4 @@ npm run tauri build  # release build; installers land in src-tauri/target/releas
 
 ## Next (see SPEC.md for the full list)
 
-Finance phrases, settings (quick-popup hotkey, workday region, hours per workday), real files instead of localStorage for the sheetbook.
+Settings (quick-popup hotkey, workday region, hours per workday, sales-tax name and rate), real files instead of localStorage for the sheetbook.

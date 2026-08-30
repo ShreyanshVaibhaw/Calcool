@@ -133,6 +133,13 @@ export function tokenize(line: string): RawTok[] {
       continue;
     }
 
+    if (c === "@") {
+      // "interest on $1k after 3 years @ 7%": @ reads as the word "at"
+      push({ t: "word", w: "at", from: i, to: i + 1, att: lastEnd === i });
+      i++;
+      continue;
+    }
+
     // 5'6" imperial shorthand: quote marks count as unit words only when glued to a number
     if ((c === "'" || c === '"') && lastEnd === i && toks[toks.length - 1]?.t === "num") {
       push({ t: "word", w: c, from: i, to: i + 1, att: true });

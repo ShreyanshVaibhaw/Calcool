@@ -37,7 +37,10 @@ export type Node =
   | { n: "ref"; idx: number }
   | { n: "var"; name: string }
   | { n: "span"; a: Node; b: Node; unit?: Unit } // distance between two dates
-  | { n: "wdname"; c: Node }; // weekday of a date
+  | { n: "wdname"; c: Node } // weekday of a date
+  // finance: ci/interest = compound interest (freq = compounds per year), loan = amortized
+  // repayment (freq = payments per year, total = whole-term sum), cagr = annualized return
+  | { n: "fin"; op: "ci" | "interest" | "loan" | "cagr"; p: Node; years: Node; rate?: Node; ret?: Node; freq?: number; total?: boolean };
 
 type Sig =
   | { s: "num"; d: Decimal; base?: number; from: number; to: number }
@@ -66,6 +69,9 @@ type Sig =
 const KWS = new Set([
   "of", "off", "on", "in", "to", "as", "into", "at", "per", "is", "what", "a", "an", "and", "mod", "nearest", "dp", "digits",
   "after", "before", "from", "since", "until", "till", "ago", "left", "between", "next", "last", "time",
+  // finance phrases
+  "interest", "compounding", "compounded", "repayment", "repayments", "payment", "payments", "over",
+  "annual", "annually", "annualized", "yearly", "monthly", "weekly", "daily", "quarterly", "return", "invested", "returned",
 ]);
 export const AGGS = new Set(["total", "sum", "average", "avg", "count", "median"]);
 const FNS = new Set([
@@ -486,7 +492,9 @@ export function parseSig(sig: Sig[]): ParseResult {
   }
 
   // aggregate over an inline list: "total of 3, 4, 7 and 9"
-  if (first.s === "kw" && AGGS.has(first.kw) && sig.length > 1) {
+  // ("total repayment on ..." is a finance phrase, not an aggregate)
+  const aggBlocked = sig[1]?.s === "kw" && /^(re)?payments?$/.test(sig[1].kw);
+  if (first.s === "kw" && AGGS.has(first.kw) && sig.length > 1 && !aggBlocked) {
     let i = 1;
     if (isKw(sig[i], "of")) i++;
     const dep = depths(sig);
@@ -594,6 +602,9 @@ function parseSlice(sigIn: Sig[]): Node | null {
     }
   }
 
+  const finNode = financeScans(sig);
+  if (finNode) return finNode;
+
   const timeNode = timeScans(sig);
   if (timeNode) return timeNode;
   const dateNode = dateScans(sig);
@@ -624,6 +635,97 @@ function parseSlice(sigIn: Sig[]): Node | null {
   if (sig.length === 0) return null;
 
   return runSplit(sig);
+}
+
+// compounds/payments per year for finance phrases
+const FREQ: Record<string, number> = { annual: 1, annually: 1, yearly: 1, quarterly: 4, monthly: 12, weekly: 52, daily: 365 };
+
+// compound interest, loan repayments, and annualized return - see SPEC.md Finance
+function financeScans(sig: Sig[]): Node | null {
+  const dep = depths(sig);
+  const kwAt = (k: number): string | null => {
+    const t = sig[k];
+    return t?.s === "kw" && dep[k] === 0 ? t.kw : null;
+  };
+  // a rate slice must contain a percent, so "at 5pm" never reads as an interest rate
+  const hasPct = (toks: Sig[]) => toks.some((t) => (t.s === "op" && t.op === "%") || (t.s === "fmt" && t.fmt.startsWith("percent")));
+
+  // [interest on] <principal> after <duration> at <rate> [compounding <freq>]
+  {
+    let end = sig.length;
+    let freq = 1; // Soulver compounds annually unless told otherwise
+    const fw = kwAt(end - 1);
+    if (fw && FREQ[fw] && ["compounding", "compounded"].includes(kwAt(end - 2) ?? "")) {
+      freq = FREQ[fw];
+      end -= 2;
+    }
+    for (let j = end - 1; j > 1; j--) {
+      if (kwAt(j) !== "at" || !hasPct(sig.slice(j + 1, end))) continue;
+      for (let i = j - 1; i > 0; i--) {
+        if (kwAt(i) !== "after") continue;
+        const durToks = sig.slice(i + 1, j);
+        if (!durToks.some((t) => t.s === "unit" && t.unit.category === "duration")) continue;
+        const interestOnly = kwAt(0) === "interest" && kwAt(1) === "on";
+        const p = parseSlice(sig.slice(interestOnly ? 2 : 0, i));
+        const years = parseSlice(durToks);
+        const rate = parseSlice(sig.slice(j + 1, end));
+        if (p && years && rate) return { n: "fin", op: interestOnly ? "interest" : "ci", p, years, rate, freq };
+      }
+    }
+  }
+
+  // [monthly|yearly|daily|weekly|quarterly|total] repayment on <principal> over <duration> at <rate>
+  {
+    const isRepay = (w: string | null) => !!w && /^(re)?payments?$/.test(w);
+    let rp = -1;
+    let freq = 12; // repayments are monthly unless told otherwise
+    let total = false;
+    const first = kwAt(0);
+    if (isRepay(first)) rp = 0;
+    else if (first && isRepay(kwAt(1))) {
+      if (FREQ[first]) {
+        freq = FREQ[first];
+        rp = 1;
+      } else if (first === "total") {
+        total = true;
+        rp = 1;
+      }
+    }
+    if (rp >= 0 && kwAt(rp + 1) === "on") {
+      for (let i = rp + 3; i < sig.length; i++) {
+        if (kwAt(i) !== "over") continue;
+        for (let j = i + 2; j < sig.length; j++) {
+          if (kwAt(j) !== "at" || !hasPct(sig.slice(j + 1))) continue;
+          const p = parseSlice(sig.slice(rp + 2, i));
+          const years = parseSlice(sig.slice(i + 1, j));
+          const rate = parseSlice(sig.slice(j + 1));
+          if (p && years && rate) return { n: "fin", op: "loan", p, years, rate, freq, total };
+        }
+      }
+    }
+  }
+
+  // [annual] return on <invested> invested <returned> returned after <duration>
+  {
+    const k = kwAt(0) === "annual" || kwAt(0) === "annualized" ? 1 : 0;
+    if (kwAt(k) === "return" && kwAt(k + 1) === "on") {
+      const find = (w: string, from: number) => {
+        for (let i = from; i < sig.length; i++) if (kwAt(i) === w) return i;
+        return -1;
+      };
+      const inv = find("invested", k + 2);
+      const ret = inv < 0 ? -1 : find("returned", inv + 2);
+      const aft = ret < 0 ? -1 : find("after", ret + 1);
+      if (inv > k + 2 && ret > inv + 1 && aft >= ret) {
+        const p = parseSlice(sig.slice(k + 2, inv));
+        const r = parseSlice(sig.slice(inv + 1, ret));
+        const years = parseSlice(sig.slice(aft + 1));
+        if (p && r && years) return { n: "fin", op: "cagr", p, years, ret: r };
+      }
+    }
+  }
+
+  return null;
 }
 
 function parseTarget(toks: Sig[]): Target | null {

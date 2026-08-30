@@ -84,6 +84,17 @@ const GOLDENS: [string, string][] = [
   ["90 kg in stone and lb", "14 stone 2.42 lb"],
   ["2 stone 3 lb in kg", "14.06 kg"],
   ["5.999999 ft + 0 ft", "6 ft"],
+
+  // finance phrases
+  ["$1,000 after 3 years at 7%", "$1,225.04"],
+  ["interest on $1k after 3 years @ 7%", "$225.04"],
+  ["$1,000 after 3 years at 7% compounding monthly", "$1,232.93"],
+  ["$5,000 after 18 months at 4.5% compounded quarterly", "$5,347.14"],
+  ["monthly repayment on $10,000 over 6 years at 6%", "$165.73"],
+  ["total repayment on $10,000 over 6 years at 6%", "$11,932.48"],
+  ["yearly repayment on $10,000 over 6 years at 6%", "$2,033.63"],
+  ["annual return on $1,000 invested $2,500 returned after 7 years", "13.99%"],
+  ["total of 3, 4, 7 and 9", "23"],
   ["65 kg in pounds", "143.3 lb"],
   ["1km + 1,000m", "2 km"],
   ["300 + 20 km", "320 km"],
