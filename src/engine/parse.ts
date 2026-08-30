@@ -48,6 +48,7 @@ export type Node =
 type Sig =
   | { s: "tax"; from: number; to: number } // the configured sales-tax word (VAT/GST)
   | { s: "subst"; dens: Decimal; from: number; to: number } // cooking substance (butter, flour...)
+  | { s: "lap"; secs: Decimal; from: number; to: number } // laptime literal 03:04:05, a duration
   | { s: "num"; d: Decimal; base?: number; from: number; to: number }
   | { s: "unit"; unit: Unit; from: number; to: number }
   | { s: "aff"; w: string; from: number; to: number } // word glued onto a number: 3k, 10m, 16th
@@ -216,6 +217,15 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
           matched = k + 1;
           name = cand;
           end = wt.to;
+        }
+      }
+      if (!matched) {
+        // plural fallback so "5 watermelons" finds the "watermelon" custom unit
+        const single = lower.endsWith("es") && env.vars.has(lower.slice(0, -2)) ? lower.slice(0, -2) : lower.endsWith("s") && env.vars.has(lower.slice(0, -1)) ? lower.slice(0, -1) : null;
+        if (single) {
+          matched = 1;
+          name = single;
+          end = t.to;
         }
       }
       if (matched) {
@@ -424,8 +434,26 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
     i++;
   }
 
-  // clock literals: 7:30 / 16:00 / 3pm / 7:30 pm (a trailing :seconds group is dropped)
   const isAmpmTok = (t: Sig | undefined): boolean => !!t && (t.s === "ampm" || (t.s === "aff" && /^(am|pm)$/i.test(t.w)));
+
+  // laptimes: a full H:MM:SS triple is a duration (03:04:05 + 01:02:03), unless am/pm follows
+  for (let k = 0; k < sig.length; k++) {
+    const a = sig[k];
+    const b = sig[k + 1];
+    const c = sig[k + 2];
+    const d1 = sig[k + 3];
+    const e1 = sig[k + 4];
+    if (a?.s !== "num" || !a.d.isInteger() || a.d.isNeg()) continue;
+    if (!(b?.s === "op" && b.op === ":" && c?.s === "num" && c.d.isInteger())) continue;
+    if (!(d1?.s === "op" && d1.op === ":" && e1?.s === "num")) continue;
+    if (isAmpmTok(sig[k + 5])) continue; // 3:04:05 pm stays a clock time
+    if (c.d.gte(60) || e1.d.gte(60)) continue;
+    const secs = a.d.mul(3600).plus(c.d.mul(60)).plus(e1.d);
+    sig.splice(k, 5, { s: "lap", secs, from: a.from, to: e1.to });
+    M(a.from, e1.to, "number");
+  }
+
+  // clock literals: 7:30 / 16:00 / 3pm / 7:30 pm (a trailing :seconds group is dropped)
   const ampmIsPm = (t: Sig): boolean => (t.s === "ampm" ? t.pm : t.s === "aff" && t.w.toLowerCase() === "pm");
   for (let k = 0; k < sig.length; k++) {
     const a = sig[k];
@@ -980,6 +1008,12 @@ function parseNumberish(sig: Sig[], pos: number, currencyUnit: Unit | null): PE 
     return { node: { n: "value", v }, pos: p };
   }
 
+  // "5 watermelons": a number glued to a variable multiplies it (custom units)
+  const nv = sig[p];
+  if (nv?.s === "var") {
+    return { node: { n: "bin", op: "*", l: { n: "value", v: { kind: "number", d } }, r: { n: "var", name: nv.name } }, pos: p + 1 };
+  }
+
   return { node: { n: "value", v: { kind: "number", d } }, pos: p };
 }
 
@@ -996,6 +1030,10 @@ function parsePrimary(sig: Sig[], pos: number): PE | null {
     // bare unit = 1 of it (needed for "30 / week"); flagged so a lone stray unit word
     // in prose does not produce a phantom answer
     return { node: { n: "value", v: { kind: "quantity", d: new Decimal(1), unit: t.unit }, bare: true }, pos: pos + 1 };
+  }
+
+  if (t.s === "lap") {
+    return { node: { n: "value", v: { kind: "quantity", d: t.secs, unit: unitById("s"), disp: { mode: "laptime" } } }, pos: pos + 1 };
   }
 
   if (t.s === "dateval") {

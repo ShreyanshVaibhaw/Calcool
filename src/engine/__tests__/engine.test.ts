@@ -131,6 +131,13 @@ const GOLDENS: [string, string][] = [
   ["3 GB at 10 MB/s", "300 s"],
   ["3 GB at 10 MB/s in minutes", "5 min"],
   ["700 MB / (25 MB/s)", "28 s"],
+
+  // laptimes
+  ["03:04:05 + 01:02:03", "04:06:08"],
+  ["01:30:00 × 2", "03:00:00"],
+  ["04:00:00 / 2", "02:00:00"],
+  ["1:59:30 + 0:00:45", "02:00:15"],
+  ["03:04:05 in minutes", "184.08 min"],
   ["65 kg in pounds", "143.3 lb"],
   ["1km + 1,000m", "2 km"],
   ["300 + 20 km", "320 km"],
@@ -174,6 +181,13 @@ describe("golden single lines", () => {
       expect(line(input)).toBe(expected);
     });
   }
+});
+
+describe("custom units", () => {
+  test("1 watermelon = 20 lb defines a unit-like variable", () => {
+    const r = evaluateSheet(["1 watermelon = 20 lb", "5 watermelons", "5 watermelons in kg", "3 watermelons + 2 watermelons"].join("\n"));
+    expect(r.lines.map((l) => l.formatted)).toEqual(["20 lb", "100 lb", "45.36 kg", "100 lb"]);
+  });
 });
 
 describe("configurable sales tax", () => {

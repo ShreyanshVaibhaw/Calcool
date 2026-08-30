@@ -136,6 +136,17 @@ export function formatValue(v: Value): string {
         push(disp.span.d, "day");
         return parts.length ? parts.join(" ") : "0 days";
       }
+      if (disp.mode === "laptime" && v.unit.category === "duration") {
+        let total = v.d.mul(v.unit.factor); // seconds
+        const sign = total.isNeg() ? "-" : "";
+        total = total.abs().toDecimalPlaces(2);
+        const h = total.div(3600).floor();
+        const m = total.mod(3600).div(60).floor();
+        const s = total.mod(60);
+        const pad = (x: Decimal) => x.toFixed().padStart(2, "0");
+        const sStr = s.isInteger() ? pad(s) : (s.lt(10) ? "0" : "") + trimZeros(s.toFixed(2));
+        return `${sign}${pad(h)}:${pad(m)}:${sStr}`;
+      }
       if (disp.mode === "pitch" && v.unit.category === "frequency") {
         const hz = v.d.mul(v.unit.factor).toNumber();
         const n = Math.round(12 * Math.log2(hz / 440)); // semitones from A4

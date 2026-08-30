@@ -167,19 +167,25 @@ export function evaluateSheet(text: string): SheetOut {
     // assignment: "monthly rent = $1,450"
     const toks = tokenize(body);
     let eq = -1;
+    let eqLead = 0; // "1 watermelon = 20 lb" defines a custom unit; the leading 1 is dropped
     let depth = 0;
     for (let i = 0; i < toks.length; i++) {
       const t = toks[i];
       if (t.t === "lp") depth++;
       else if (t.t === "rp") depth--;
       else if (t.t === "op" && t.op === "=" && depth === 0) {
-        if (i > 0 && toks.slice(0, i).every((w) => w.t === "word")) eq = i;
+        const first = toks[0];
+        const lead = first?.t === "num" && first.d.eq(1) ? 1 : 0;
+        if (i > lead && toks.slice(lead, i).every((w) => w.t === "word")) {
+          eq = i;
+          eqLead = lead;
+        }
         break;
       }
     }
     if (eq > 0) {
       const eqTok = toks[eq];
-      const nameFrom = toks[0].from;
+      const nameFrom = toks[eqLead].from;
       const nameTo = toks[eq - 1].to;
       const name = normalizeVarName(body.slice(nameFrom, nameTo));
       sem.push({ from: off + nameFrom, to: off + nameTo, type: "variable" });

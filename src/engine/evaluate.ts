@@ -98,7 +98,10 @@ export function binop(op: string, l: Value, r: Value): Value {
         }
         const target = l.unit.factor.gte(r.unit.factor) ? l.unit : r.unit; // larger unit wins
         const b = sign === 1 ? toBase(l.d, l.unit).plus(toBase(r.d, r.unit)) : toBase(l.d, l.unit).minus(toBase(r.d, r.unit));
-        return Q(fromBase(b, target), target);
+        const res = Q(fromBase(b, target), target);
+        // laptime arithmetic keeps the H:MM:SS face
+        if (target.category === "duration" && (l.disp?.mode === "laptime" || r.disp?.mode === "laptime")) res.disp = { mode: "laptime" };
+        return res;
       }
       if (l.kind === "quantity" && r.kind === "number") return Q(sign === 1 ? l.d.plus(r.d) : l.d.minus(r.d), l.unit);
       if (l.kind === "number" && r.kind === "quantity") return Q(sign === 1 ? l.d.plus(r.d) : l.d.minus(r.d), r.unit);
@@ -122,8 +125,8 @@ export function binop(op: string, l: Value, r: Value): Value {
         return r.kind === "number" ? N(r.d.mul(l.d).div(100)) : Q(r.d.mul(l.d).div(100), r.unit);
       if (r.kind === "percent" && (l.kind === "number" || l.kind === "quantity"))
         return l.kind === "number" ? N(l.d.mul(r.d).div(100)) : Q(l.d.mul(r.d).div(100), l.unit);
-      if (l.kind === "quantity" && r.kind === "number") return Q(l.d.mul(r.d), l.unit);
-      if (l.kind === "number" && r.kind === "quantity") return Q(l.d.mul(r.d), r.unit);
+      if (l.kind === "quantity" && r.kind === "number") return { ...Q(l.d.mul(r.d), l.unit), disp: l.disp?.mode === "laptime" ? { mode: "laptime" } : undefined };
+      if (l.kind === "number" && r.kind === "quantity") return { ...Q(l.d.mul(r.d), r.unit), disp: r.disp?.mode === "laptime" ? { mode: "laptime" } : undefined };
       if (l.kind === "quantity" && r.kind === "quantity") {
         // money × anything counts it: $30 × 4 days = $120
         if (l.unit.category === "currency" && r.unit.category !== "currency") return Q(l.d.mul(r.d), l.unit);
@@ -181,7 +184,7 @@ export function binop(op: string, l: Value, r: Value): Value {
       if (l.kind === "number" && r.kind === "number") return N(l.d.div(rz(r.d)));
       if (l.kind === "percent" && r.kind === "number") return P(l.d.div(rz(r.d)));
       if (l.kind === "number" && r.kind === "percent") return N(l.d.div(rz(r.d.div(100))));
-      if (l.kind === "quantity" && r.kind === "number") return Q(l.d.div(rz(r.d)), l.unit);
+      if (l.kind === "quantity" && r.kind === "number") return { ...Q(l.d.div(rz(r.d)), l.unit), disp: l.disp?.mode === "laptime" ? { mode: "laptime" } : undefined };
       if (l.kind === "number" && r.kind === "quantity") return R(l.d.div(rz(r.d)), null, r.unit);
       if (l.kind === "quantity" && r.kind === "quantity") {
         if (l.unit.category === r.unit.category) return N(toBase(l.d, l.unit).div(rz(toBase(r.d, r.unit))));

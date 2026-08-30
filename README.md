@@ -38,6 +38,8 @@ npm run tauri build  # release build; installers land in src-tauri/target/releas
 - Cross-unit physics: `5 kW × 3 hours` gives `15 kWh`, `15 kWh / 5 kW` gives `3 hours`, and any quantity divides by a matching rate - `3 GB at 10 MB/s in minutes` gives `5 min`
 - Cooking densities: `300g butter in cups`, `2 cups flour in grams` (water, milk, butter, flour, sugar, honey, oil, rice, oats, cocoa, salt, cream, yogurt)
 - Music pitch: `440 hz as pitch` gives `A4`
+- Custom units: `1 watermelon = 20 lb`, then `5 watermelons` gives `100 lb` and `5 watermelons in kg` converts (plural forms find the singular definition)
+- Laptimes: a full `H:MM:SS` is a duration - `03:04:05 + 01:02:03` gives `04:06:08`, `01:30:00 × 2` gives `03:00:00`, `03:04:05 in minutes` goes decimal; clock math like `7:30 + 90 minutes` is untouched
 - Compound imperial units: `3' 4" + 9' 2"` gives `12 ft 6 in`, `5'6" in cm`, `12 feet 6 inches`, `13.5 lb` shows as `13 lb 8 oz`, `190 cm in feet and inches`, `90 kg in stone and lb`. Asking for a single unit (`in ft`) keeps the plain decimal
 - Currency with hourly-cached live rates (open.er-api.com) and an offline fallback table
 - Rates: `$25/hour × 14 hours`, `$500 at $20/hour`, `90 km / 3 days`
@@ -56,4 +58,4 @@ npm run tauri build  # release build; installers land in src-tauri/target/releas
 
 ## Next (see SPEC.md for the full list)
 
-The P0-P2 roadmap is shipped. Remaining SPEC ideas: custom units, laptimes, fuel economy, CPI inflation data.
+The P0-P2 roadmap is shipped. Remaining SPEC ideas: fuel economy, video timecode at a frame rate, CPI inflation data.
