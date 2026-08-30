@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { THEME_OPTIONS, type ThemeId } from "./theme";
 import { useAppUpdater } from "./useAppUpdater";
 import { applySettings, HOTKEY_CHOICES, loadSettings, saveSettings, type Settings } from "./settings";
+import { canOpenBookFolder, openBookFolder } from "./storage";
 
 interface SettingsDialogProps {
   dialogRef: RefObject<HTMLDialogElement | null>;
@@ -142,6 +143,14 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
             </select>
           </div>
           {hotkeyNote && <p className="setting-hint">{hotkeyNote}</p>}
+          {canOpenBookFolder && (
+            <div className="setting-row">
+              <label>Sheets live in Documents\Calcool</label>
+              <button className="update-button" type="button" onClick={() => openBookFolder()}>
+                Open sheets folder
+              </button>
+            </div>
+          )}
         </section>
 
         <section className="update-panel" aria-labelledby="updates-title">

@@ -1,6 +1,83 @@
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
+// ---- sheetbook on real files: Documents\Calcool, one .calcool text file per sheet ----
+
+fn book_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let d = app.path().document_dir().map_err(|e| e.to_string())?.join("Calcool");
+    std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;
+    Ok(d)
+}
+
+// filenames come from sheet titles; refuse anything that could escape the folder
+fn safe_name(n: &str) -> bool {
+    !n.is_empty() && n.ends_with(".calcool") && !n.contains(['/', '\\', ':']) && !n.contains("..")
+}
+
+#[derive(serde::Serialize)]
+struct BookFile {
+    file: String,
+    text: String,
+}
+
+#[derive(serde::Serialize)]
+struct BookLoad {
+    dir: String,
+    index: Option<String>,
+    files: Vec<BookFile>,
+}
+
+#[tauri::command]
+fn book_load(app: tauri::AppHandle) -> Result<BookLoad, String> {
+    let dir = book_dir(&app)?;
+    let mut files = vec![];
+    for e in std::fs::read_dir(&dir).map_err(|e| e.to_string())?.flatten() {
+        let p = e.path();
+        if p.extension().and_then(|s| s.to_str()) == Some("calcool") {
+            if let (Some(name), Ok(text)) = (p.file_name().and_then(|s| s.to_str()), std::fs::read_to_string(&p)) {
+                files.push(BookFile { file: name.to_string(), text });
+            }
+        }
+    }
+    let index = std::fs::read_to_string(dir.join("book.json")).ok();
+    Ok(BookLoad { dir: dir.to_string_lossy().into_owned(), index, files })
+}
+
+// one batched save: renames, then content writes, then deletions, then the index
+#[tauri::command]
+fn book_save(
+    app: tauri::AppHandle,
+    index: String,
+    writes: Vec<(String, String)>,
+    renames: Vec<(String, String)>,
+    deletes: Vec<String>,
+) -> Result<(), String> {
+    let dir = book_dir(&app)?;
+    for (old, new) in &renames {
+        if safe_name(old) && safe_name(new) && dir.join(old).exists() {
+            let _ = std::fs::rename(dir.join(old), dir.join(new));
+        }
+    }
+    for (name, text) in &writes {
+        if safe_name(name) {
+            std::fs::write(dir.join(name), text).map_err(|e| e.to_string())?;
+        }
+    }
+    for name in &deletes {
+        if safe_name(name) {
+            let _ = std::fs::remove_file(dir.join(name));
+        }
+    }
+    std::fs::write(dir.join("book.json"), index).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn open_book_dir(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let dir = book_dir(&app)?;
+    app.opener().open_path(dir.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
+}
+
 // Alt+Space is often owned by launchers (Flow Launcher, PowerToys Run); fall through until one sticks
 const HOTKEY_CANDIDATES: [&str; 5] = ["Alt+Space", "Ctrl+Alt+Space", "Alt+Shift+Space", "Ctrl+Shift+Space", "Alt+Q"];
 
@@ -59,7 +136,7 @@ pub fn run() {
                 })
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![set_hotkey])
+        .invoke_handler(tauri::generate_handler![set_hotkey, book_load, book_save, open_book_dir])
         .setup(|app| {
             let gs = app.global_shortcut();
             for candidate in HOTKEY_CANDIDATES {
