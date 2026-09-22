@@ -46,6 +46,8 @@ export type Node =
   // finance: ci/interest = compound interest (freq = compounds per year), loan = amortized
   // repayment (freq = payments per year, total = whole-term sum), cagr = annualized return
   | { n: "fin"; op: "ci" | "interest" | "loan" | "cagr"; p: Node; years: Node; rate?: Node; ret?: Node; freq?: number; total?: boolean }
+  | { n: "growth"; p: Node; goal: Node; rate: Node; unit: Unit } // periods to grow: "time from 20k to 100k at 10% per month"
+  | { n: "pace"; dist: Node; time: Node } // "5 km in 25 min" -> 05:00/km
   // sales tax: add = "+ VAT", remove = "- VAT" (divides out included tax), portion = "VAT on"
   | { n: "tax"; mode: "add" | "remove" | "portion"; c: Node }
   | { n: "tc"; secs: Decimal; ff: number; rate: Node } // video timecode at a frame rate
@@ -501,11 +503,23 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
       continue;
     }
     // min/max double as functions with parens: min(5, 3). Otherwise they stay aggregates.
-    if ((lower === "min" || lower === "max") && raw[i + 1]?.t === "lp") {
-      S({ s: "fn", name: lower, from: t.from, to: t.to });
-      M(t.from, t.to, "function");
-      i++;
-      continue;
+    if (lower === "min" || lower === "max") {
+      if (raw[i + 1]?.t === "lp") {
+        S({ s: "fn", name: lower, from: t.from, to: t.to });
+        M(t.from, t.to, "function");
+        i++;
+        continue;
+      }
+      // after a number, min is plain minutes ("25 min"); max has no unit so stays a keyword
+      if (raw[i - 1]?.t === "num") {
+        const u = lookupUnitWord(lower);
+        if (u) {
+          S({ s: "unit", unit: u, from: t.from, to: t.to });
+          M(t.from, t.to, "unit");
+          i++;
+          continue;
+        }
+      }
     }
     // single capital letters with exact units ("A" for amp) beat lowercase keywords ("a")
     if (w === "A") {
@@ -1138,6 +1152,37 @@ function parseSlice(sigIn: Sig[]): Node | null {
   const dateNode = dateScans(sig);
   if (dateNode) return dateNode;
 
+  // pace: "5 km in 25 min" -> 05:00/km. Late in the pipeline so real conversions,
+  // finance, and CPI phrases win; only a lone "in" with a rate-free left side fires.
+  {
+    let inAt = -1;
+    let conversions = 0;
+    for (let k = 0; k < sig.length; k++) {
+      if (!at0(k)) continue;
+      const t = sig[k];
+      if (t.s === "kw" && (t.kw === "in" || t.kw === "to" || t.kw === "as" || t.kw === "into")) {
+        conversions++;
+        if (t.kw === "in" && inAt === -1) inAt = k;
+      }
+    }
+    if (inAt > 0 && conversions === 1) {
+      const l = sig.slice(0, inAt);
+      const r = sig.slice(inAt + 1);
+      const ldep = depths(l);
+      const clean = l.every((t, k) => {
+        if (ldep[k] !== 0) return true;
+        if (t.s === "op" && t.op === "/") return false;
+        if (t.s === "kw" && (t.kw === "per" || t.kw === "at")) return false;
+        return true;
+      });
+      if (clean && l.length > 0 && r.length > 0) {
+        const dist = parseSlice(l);
+        const time = parseSlice(r);
+        if (dist && time) return { n: "pace", dist, time };
+      }
+    }
+  }
+
   // -- logic: or splits loosest, then and, then comparisons. and/or only fire when a side
   // looks boolean, so prose like "5 and 3" keeps its last-valid-expression answer.
   const isCompOp = (t: Sig | undefined): string | null =>
@@ -1300,6 +1345,25 @@ function financeScans(sig: Sig[]): Node | null {
   };
   // a rate slice must contain a percent, so "at 5pm" never reads as an interest rate
   const hasPct = (toks: Sig[]) => toks.some((t) => (t.s === "op" && t.op === "%") || (t.s === "fmt" && t.fmt.startsWith("percent")));
+
+  // time to grow: "time from 20k to 100k at 10% per month" (answer in the per-unit)
+  if (kwAt(0) === "time" && kwAt(1) === "from") {
+    for (let i = 3; i < sig.length; i++) {
+      if (kwAt(i) !== "to") continue;
+      for (let j = i + 2; j < sig.length; j++) {
+        if (kwAt(j) !== "at" || !hasPct(sig.slice(j + 1))) continue;
+        for (let k = j + 1; k < sig.length; k++) {
+          if (kwAt(k) !== "per") continue;
+          const u = sig[k + 1];
+          if (k + 2 !== sig.length || u?.s !== "unit" || u.unit.category !== "duration") continue;
+          const p = parseSlice(sig.slice(2, i));
+          const goal = parseSlice(sig.slice(i + 1, j));
+          const rate = parseSlice(sig.slice(j + 1, k));
+          if (p && goal && rate) return { n: "growth", p, goal, rate, unit: u.unit };
+        }
+      }
+    }
+  }
 
   // [interest on] <principal> after <duration> at <rate> [compounding <freq>]
   {

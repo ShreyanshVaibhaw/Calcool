@@ -133,6 +133,21 @@ export function formatValue(v: Value): string {
       if (disp.mode === "sci") return sci(v.d);
       if (disp.mode === "fraction") return fraction(v.d);
       if (disp.mode === "multiplier") return formatDecimal(v.d, { maxDp: disp.dp ?? 10, si: false }) + "x";
+      if (disp.mode === "pace") {
+        // minutes per km/mi as MM:SS: 5 -> "05:00/km"
+        const sign = v.d.isNeg() ? "-" : "";
+        const abs = v.d.abs();
+        let mm = abs.floor();
+        let ss = abs.minus(mm).mul(60).toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
+        if (ss.eq(60)) {
+          ss = new Decimal(0);
+          mm = mm.plus(1);
+        }
+        const hh = mm.div(60).floor();
+        const mm2 = mm.mod(60);
+        const clock = hh.gt(0) ? `${hh.toFixed()}:${p2(mm2.toNumber())}:${p2(ss.toNumber())}` : `${p2(mm.toNumber())}:${p2(ss.toNumber())}`;
+        return `${sign}${clock}/${disp.sub ?? "km"}`;
+      }
       return formatDecimal(v.d, { maxDp: disp.dp ?? 10, si: disp.dp === undefined });
     }
     case "percent":

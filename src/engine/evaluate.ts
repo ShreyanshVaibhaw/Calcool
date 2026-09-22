@@ -974,6 +974,34 @@ export function evalNode(node: Node, env: EvalEnv): Value {
       const fv = pV.d.mul(new Decimal(1).plus(rp).pow(n));
       return money(node.op === "interest" ? fv.minus(pV.d) : fv);
     }
+    case "growth": {
+      // periods to grow from p to goal at rate per period: n = ln(goal/p) / ln(1+r)
+      const pV = evalNode(node.p, env);
+      const gV = evalNode(node.goal, env);
+      const rV = evalNode(node.rate, env);
+      if (pV.kind !== "number" && pV.kind !== "quantity") bad();
+      if (gV.kind !== "number" && gV.kind !== "quantity") bad();
+      if (rV.kind !== "percent") bad();
+      const pv = (pV as Extract<Value, { kind: "number" }>).d;
+      const fv = (gV as Extract<Value, { kind: "number" }>).d;
+      const r = (rV as Extract<Value, { kind: "percent" }>).d.div(100);
+      if (pv.lte(0) || r.lte(0) || fv.lt(pv)) bad();
+      if (fv.eq(pv)) return Q(new Decimal(0), node.unit);
+      return Q(Decimal.ln(fv.div(pv)).div(Decimal.ln(new Decimal(1).plus(r))), node.unit);
+    }
+    case "pace": {
+      const a = evalNode(node.dist, env);
+      const b = evalNode(node.time, env);
+      if (a.kind === "quantity" && a.unit.category === "length" && b.kind === "quantity" && b.unit.category === "duration") {
+        const mins = toBase(b.d, b.unit).div(60);
+        const perMile = a.unit.id === "mi";
+        const dist = convertQty(a.d, a.unit, unitById(perMile ? "mi" : "km"));
+        if (dist.lte(0)) bad();
+        return { kind: "number", d: mins.div(dist), disp: { mode: "pace", sub: perMile ? "mi" : "km" } };
+      }
+      bad();
+      break;
+    }
     case "tc": {
       // HH:MM:SS:FF at a frame rate becomes a duration that can render back to frames
       const rateV = evalNode(node.rate, env);

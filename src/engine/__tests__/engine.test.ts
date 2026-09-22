@@ -302,6 +302,14 @@ const GOLDENS: [string, string][] = [
   ["1 cm in px @ 326 ppi", "128.35 px"],
   ["1 cup in ml", "236.59 mL"],
 
+  // 1.10 growth, pace, downloads
+  ["time from 20k to 100k at 10% per month", "16.89 months"],
+  ["time to download 3GB @ 10 MB/s", "300 s"],
+  ["time to download 3GB @ 10 MB/s in minutes", "5 min"],
+  ["5 km in 25 min", "05:00/km"],
+  ["my 5 km morning run in 25 min", "05:00/km"],
+  ["26.2 miles in 4 hours", "09:10/mi"],
+
   // 1.9 timestamps, timespans, ISO
   ["April 1, 2019 to timestamp", "1,554,076,800"],
   ["1559740303 to date", "5 June 2019"],
@@ -446,7 +454,7 @@ describe("date math", () => {
     ["weekday on March 9, 2024", "Saturday"],
     ["days in February 2020", "29 days"],
     ["days in 2020", "366 days"],
-    ["hours in June", "720 hours"],
+  ["hours in June", "720 hours"],
     ["days in 3 weeks", "21 days"],
     ["days until tomorrow", "1 day"],
     ["days since yesterday", "1 day"],

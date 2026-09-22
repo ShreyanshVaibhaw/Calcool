@@ -46,7 +46,7 @@ export interface Unit {
 
 // Display hints attached by "as hex", "to 2 dp" etc. They change rendering, not the value.
 export interface Disp {
-  mode?: "hex" | "bin" | "oct" | "sci" | "fraction" | "multiplier" | "weekday" | "span" | "hm" | "pitch" | "laptime" | "timespan" | "iso";
+  mode?: "hex" | "bin" | "oct" | "sci" | "fraction" | "multiplier" | "pace" | "weekday" | "span" | "hm" | "pitch" | "laptime" | "timespan" | "iso";
   dp?: number;
   span?: { y: number; m: number; w: number; d: number }; // humanized date distance
   sub?: string; // compound imperial display: unit id of the remainder ("6 ft 2 in")
