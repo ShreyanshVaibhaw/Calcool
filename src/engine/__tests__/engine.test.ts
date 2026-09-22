@@ -267,6 +267,11 @@ const GOLDENS: [string, string][] = [
   ["lcm of 4 and 6", "12"],
   ["standard deviation of 2, 4, 4, 4, 5, 5, 7, 9", "2"],
 
+  // 1.6 tags (#tag stays math, "# note" stays a comment)
+  ["lunch $20 #work", "$20.00"],
+  ["lunch $20 # note", "$20.00"],
+  ["total of #work", ""],
+
   // word skipping
   ["lunch was $18.50 + 20% tip", "$22.20"],
   ["answer 42 costs $10", "$10.00"],
@@ -317,6 +322,25 @@ describe("block aggregates and bare percent", () => {
   test("tip pattern with money and total", () => {
     const r = evaluateSheet(["dinner was $100", "drinks $20", "tip 10%", "total"].join("\n"));
     expect(r.lines.map((l) => l.formatted)).toEqual(["$100.00", "$20.00", "$12.00", "$132.00"]);
+  });
+});
+
+describe("tags and dividers", () => {
+  test("total of #work sums only tagged lines", () => {
+    const r = evaluateSheet(["lunch $20 #work", "coffee $5 #work", "movie $15 #fun", "total of #work"].join("\n"));
+    expect(r.lines.map((l) => l.formatted)).toEqual(["$20.00", "$5.00", "$15.00", "$25.00"]);
+  });
+  test("plain total still sums tagged lines", () => {
+    const r = evaluateSheet(["lunch $20 #work", "coffee $5 #fun", "total"].join("\n"));
+    expect(r.lines.map((l) => l.formatted)).toEqual(["$20.00", "$5.00", "$25.00"]);
+  });
+  test("count of #work counts tagged lines", () => {
+    const r = evaluateSheet(["a 10 #work", "b 20", "c 30 #work", "count of #work"].join("\n"));
+    expect(r.lines.map((l) => l.formatted)).toEqual(["10", "20", "30", "2"]);
+  });
+  test("--- resets total scope", () => {
+    const r = evaluateSheet(["10", "20", "---", "30", "total"].join("\n"));
+    expect(r.lines.map((l) => l.formatted)).toEqual(["10", "20", "", "30", "30"]);
   });
 });
 

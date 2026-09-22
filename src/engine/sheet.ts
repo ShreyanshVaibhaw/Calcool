@@ -6,13 +6,14 @@ import { Value, CalcError, Decimal } from "./value";
 
 export type { SemTok } from "./parse";
 
-export type LineKind = "empty" | "heading" | "comment" | "normal" | "assign" | "aggregate";
+export type LineKind = "empty" | "heading" | "comment" | "divider" | "normal" | "assign" | "aggregate";
 
 export interface LineOut {
   kind: LineKind;
   value: Value | null;
   formatted: string;
   sem: SemTok[];
+  tags: string[];
 }
 
 export interface SheetOut {
@@ -34,7 +35,7 @@ function maskComments(line: string): Masked {
   let m: RegExpExecArray | null;
   while ((m = quoteRe.exec(line))) spans.push({ from: m.index, to: m.index + m[0].length });
 
-  // // comment (but not ://), and a trailing " # note"
+  // // comment (but not ://), and a trailing " # note" ("#tag" stays math)
   let cut = -1;
   let p = 0;
   while (p < line.length) {
@@ -46,8 +47,14 @@ function maskComments(line: string): Masked {
     }
     p = idx + 2;
   }
-  const hash = line.search(/[ \t]#/);
-  if (hash !== -1 && (cut === -1 || hash + 1 < cut)) cut = hash + 1;
+  const hashRe = /[ \t]#/g;
+  let hm: RegExpExecArray | null;
+  while ((hm = hashRe.exec(line))) {
+    const after = line[hm.index + 2];
+    if (after !== undefined && /[A-Za-z]/.test(after)) continue; // #tag, not a comment
+    const c = hm.index + 1;
+    if (cut === -1 || c < cut) cut = c;
+  }
   if (cut !== -1) spans.push({ from: cut, to: line.length });
 
   let masked = line;
@@ -77,7 +84,7 @@ function windowAggregate(name: string, out: LineOut[]): Value | null {
   const collected: Value[] = [];
   for (let j = out.length - 1; j >= 0; j--) {
     const l = out[j];
-    if (l.kind === "empty" || l.kind === "heading" || l.kind === "aggregate") break;
+    if (l.kind === "empty" || l.kind === "heading" || l.kind === "divider" || l.kind === "aggregate") break;
     if (l.value) collected.push(l.value);
   }
   const usable = collected.filter((v) => v.kind !== "percent" && v.kind !== "date" && v.kind !== "time" && v.kind !== "bool");
@@ -120,9 +127,10 @@ function windowAggregate(name: string, out: LineOut[]): Value | null {
 // A line holding nothing but a percent ("10%", "tip 10%") applies to the running
 // subtotal above it: the tax/tip pattern. No subtotal above means a plain percent.
 function isBarePercent(sig: Sig[]): boolean {
+  const core = sig.filter((t) => t.s !== "tag");
   const pct = (t: Sig | undefined): boolean => !!t && t.s === "op" && (t as Extract<Sig, { s: "op" }>).op === "%";
-  if (sig.length === 2 && sig[0].s === "num" && pct(sig[1])) return true;
-  if (sig.length === 3 && sig[0].s === "op" && sig[1].s === "num" && pct(sig[2])) return true;
+  if (core.length === 2 && core[0].s === "num" && pct(core[1])) return true;
+  if (core.length === 3 && core[0].s === "op" && core[1].s === "num" && pct(core[2])) return true;
   return false;
 }
 
@@ -130,7 +138,7 @@ function blockSubtotal(out: LineOut[]): Value | null {
   const collected: Value[] = [];
   for (let j = out.length - 1; j >= 0; j--) {
     const l = out[j];
-    if (l.kind === "empty" || l.kind === "heading" || l.kind === "aggregate") break;
+    if (l.kind === "empty" || l.kind === "heading" || l.kind === "divider" || l.kind === "aggregate") break;
     if (l.value) collected.push(l.value);
   }
   const usable = collected.filter((v) => v.kind !== "percent" && v.kind !== "date" && v.kind !== "time" && v.kind !== "bool");
@@ -142,6 +150,51 @@ function blockSubtotal(out: LineOut[]): Value | null {
   }
 }
 
+// Tagged aggregate: "total of #work" folds only tagged lines in the block.
+function taggedAggregate(name: string, tag: string, out: LineOut[]): Value | null {
+  const collected: Value[] = [];
+  for (let j = out.length - 1; j >= 0; j--) {
+    const l = out[j];
+    if (l.kind === "empty" || l.kind === "heading" || l.kind === "divider" || l.kind === "aggregate") break;
+    if (l.value && l.tags.includes(tag)) collected.push(l.value);
+  }
+  const usable = collected.filter((v) => v.kind !== "percent" && v.kind !== "date" && v.kind !== "time" && v.kind !== "bool");
+  if (!usable.length) return null;
+  try {
+    switch (name) {
+      case "total":
+      case "sum":
+        return fold(usable);
+      case "count":
+        return { kind: "number", d: new Decimal(usable.length) };
+      case "average": {
+        const s = fold(usable);
+        if (!s) return null;
+        return { ...s, d: s.d.div(usable.length) };
+      }
+      case "median": {
+        const sorted = [...usable].sort((a, b) => a.d.cmp(b.d));
+        const mid = Math.floor(sorted.length / 2);
+        if (sorted.length % 2 === 1) return sorted[mid];
+        const s = addValues(sorted[mid - 1], sorted[mid]);
+        return { ...s, d: s.d.div(2) };
+      }
+      case "min":
+      case "max": {
+        let best = usable[0];
+        for (const v of usable.slice(1)) {
+          const better = name === "max" ? baseKey(v).gt(baseKey(best)) : baseKey(v).lt(baseKey(best));
+          if (better) best = v;
+        }
+        return best;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 export function evaluateSheet(text: string): SheetOut {
   const rawLines = text.split("\n");
   const env: Env = { vars: new Map(), lineValues: [] };
@@ -150,7 +203,7 @@ export function evaluateSheet(text: string): SheetOut {
 
   for (const raw of rawLines) {
     const sem: SemTok[] = [];
-    const finish = (kind: LineKind, value: Value | null) => {
+    const finish = (kind: LineKind, value: Value | null, tags: string[] = []) => {
       let formatted = "";
       if (value) {
         try {
@@ -159,7 +212,7 @@ export function evaluateSheet(text: string): SheetOut {
           value = null;
         }
       }
-      out.push({ kind, value, formatted, sem });
+      out.push({ kind, value, formatted, sem, tags });
       env.lineValues.push(value);
       off += raw.length + 1;
     };
@@ -169,11 +222,17 @@ export function evaluateSheet(text: string): SheetOut {
       continue;
     }
 
-    // heading
-    if (/^\s*#/.test(raw)) {
+    // heading ("# groceries"); "#tag" without a space stays math
+    if (/^\s*#(\s|$)/.test(raw)) {
       const s = raw.length - raw.trimStart().length;
       sem.push({ from: off + s, to: off + raw.trimEnd().length, type: "heading" });
       finish("heading", null);
+      continue;
+    }
+
+    // divider ("---"); shows no answer and resets total scope like a heading
+    if (/^\s*---+\s*$/.test(raw)) {
+      finish("divider", null);
       continue;
     }
 
@@ -227,6 +286,7 @@ export function evaluateSheet(text: string): SheetOut {
       const { sig, sem: rhsSem } = classify(body.slice(rhsBase), env, off + rhsBase);
       sem.push(...rhsSem);
       const parsed = parseSig(sig);
+      const rhsTags = sig.filter((t): t is Extract<Sig, { s: "tag" }> => t.s === "tag").map((t) => t.tag);
       let value: Value | null = null;
       if (parsed?.kind === "expr") {
         try {
@@ -238,7 +298,7 @@ export function evaluateSheet(text: string): SheetOut {
         value = windowAggregate(parsed.name, out);
       }
       if (value) env.vars.set(name, value);
-      finish("assign", value);
+      finish("assign", value, rhsTags);
       continue;
     }
 
@@ -252,6 +312,10 @@ export function evaluateSheet(text: string): SheetOut {
     }
     if (parsed.kind === "agg") {
       finish("aggregate", windowAggregate(parsed.name, out));
+      continue;
+    }
+    if (parsed.kind === "tagged") {
+      finish("aggregate", taggedAggregate(parsed.name, parsed.tag, out));
       continue;
     }
     let value: Value | null = null;
@@ -271,7 +335,8 @@ export function evaluateSheet(text: string): SheetOut {
         }
       }
     }
-    finish("normal", value);
+    const tags = sig.filter((t): t is Extract<Sig, { s: "tag" }> => t.s === "tag").map((t) => t.tag);
+    finish("normal", value, tags);
   }
 
   // quick total (bottom-right): totals if any exist, otherwise all plain result lines

@@ -690,6 +690,7 @@ body {
 .ck-comment { color: var(--comment); font-style: italic; }
 .ck-heading { color: var(--fg); font-weight: 700; }
 .ck-label { color: var(--fg); font-weight: 600; }
+.ck-tag { color: var(--kw); font-weight: 600; }
 
 /* Alt held: numbers advertise that they scrub */
 .cm-editor.ck-alt .ck-num {

@@ -25,6 +25,7 @@ const TOKEN_CLASS: Record<string, string> = {
   comment: "ck-comment",
   heading: "ck-heading",
   label: "ck-label",
+  tag: "ck-tag",
 };
 
 // ---------------------------------------------------------------------------

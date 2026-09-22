@@ -5,6 +5,7 @@ export type RawTok =
   | { t: "word"; w: string; from: number; to: number; att: boolean }
   | { t: "op"; op: string; from: number; to: number; spacedL: boolean }
   | { t: "cur"; sym: string; from: number; to: number; att: boolean }
+  | { t: "tag"; tag: string; from: number; to: number; att: boolean }
   | { t: "lp" | "rp" | "comma"; from: number; to: number };
 
 const CUR_CHARS = "$€£¥₹₽₩฿₺";
@@ -147,6 +148,19 @@ export function tokenize(line: string): RawTok[] {
       // "interest on $1k after 3 years @ 7%": @ reads as the word "at"
       push({ t: "word", w: "at", from: i, to: i + 1, att: lastEnd === i });
       i++;
+      continue;
+    }
+
+    // #tag trailing a result line ("lunch $20 #work"); "# note" stays a comment
+    if (c === "#" && /[A-Za-z]/.test(line[i + 1] ?? "")) {
+      const from = i;
+      let w = "";
+      i++;
+      while (i < line.length && /[A-Za-z0-9_-]/.test(line[i])) {
+        w += line[i];
+        i++;
+      }
+      push({ t: "tag", tag: w.toLowerCase(), from, to: i, att: lastEnd === from });
       continue;
     }
 

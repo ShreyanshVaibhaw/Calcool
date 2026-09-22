@@ -69,6 +69,7 @@ type Sig =
   | { s: "ref"; idx: number; from: number; to: number }
   | { s: "month"; m: number; from: number; to: number }
   | { s: "wday"; w: number; from: number; to: number }
+  | { s: "tag"; tag: string; from: number; to: number } // #work trailing a result line
   | { s: "dateval"; ed: number; from: number; to: number }
   | { s: "wdfn"; from: number; to: number } // "weekday" / "day of the week"
   | { s: "clock"; mins: number; from: number; to: number } // 7:30, 4pm, noon (no date yet)
@@ -251,6 +252,12 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
         S({ s: "unit", unit: u, from: t.from, to: t.to });
         M(t.from, t.to, "currency");
       } else markDrop();
+      i++;
+      continue;
+    }
+    if (t.t === "tag") {
+      S({ s: "tag", tag: t.tag, from: t.from, to: t.to });
+      M(t.from, t.to, "tag");
       i++;
       continue;
     }
@@ -662,7 +669,7 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
 // parsing
 // ---------------------------------------------------------------------------
 
-export type ParseResult = { kind: "expr"; node: Node } | { kind: "agg"; name: string } | null;
+export type ParseResult = { kind: "expr"; node: Node } | { kind: "agg"; name: string } | { kind: "tagged"; name: string; tag: string } | null;
 
 const isKw = (t: Sig | undefined, kw: string): boolean => !!t && t.s === "kw" && t.kw === kw;
 const isOp = (t: Sig | undefined, op: string): boolean => !!t && t.s === "op" && t.op === op;
@@ -685,6 +692,15 @@ export function parseSig(sig: Sig[]): ParseResult {
 
   const first = sig[0];
   if (sig.length === 1 && first.s === "kw" && AGGS.has(first.kw)) return { kind: "agg", name: first.kw };
+
+  // tagged total: "total of #work" sums only tagged lines in the block
+  if (first.s === "kw" && AGGS.has(first.kw)) {
+    const tagToks = sig.filter((t): t is Extract<Sig, { s: "tag" }> => t.s === "tag");
+    const rest = sig.slice(1);
+    if (tagToks.length === 1 && rest.every((t) => t.s === "tag" || (t.s === "kw" && t.kw === "of"))) {
+      return { kind: "tagged", name: first.kw, tag: tagToks[0].tag };
+    }
+  }
 
   // bare unit pair: "usd eur", "km m" means "1 usd in eur"
   if (sig.length === 2 && sig[0].s === "unit" && sig[1].s === "unit") {
