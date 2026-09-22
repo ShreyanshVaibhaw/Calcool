@@ -151,6 +151,42 @@ const DEFS: Def[] = [
   // angle, base radian
   { id: "rad", cat: "angle", factor: 1, symbol: "rad", names: ["rad", "radian", "radians"] },
   { id: "deg", cat: "angle", factor: D("3.141592653589793238462643383279503").div(180), symbol: "°", names: ["deg", "degree", "degrees"] },
+
+  // amount of substance, base mole
+  { id: "mol", cat: "amount", factor: 1, symbol: "mol", names: ["mol", "mole", "moles"] },
+  { id: "mmol", cat: "amount", factor: 0.001, symbol: "mmol", names: ["mmol", "millimole", "millimoles"] },
+
+  // concentration, base mol/L
+  { id: "M", cat: "concentration", factor: 1, symbol: "M", exact: ["M"], names: ["molar", "molarity"] },
+  { id: "mM", cat: "concentration", factor: 0.001, symbol: "mM", exact: ["mM"], names: ["millimolar"] },
+
+  // voltage, base volt
+  { id: "V", cat: "voltage", factor: 1, symbol: "V", exact: ["V"], names: ["v", "volt", "volts"] },
+  { id: "mV", cat: "voltage", factor: 0.001, symbol: "mV", exact: ["mV"], names: ["millivolt", "millivolts"] },
+  { id: "kV", cat: "voltage", factor: 1e3, symbol: "kV", exact: ["kV"], names: ["kilovolt", "kilovolts"] },
+
+  // current, base ampere
+  { id: "A", cat: "current", factor: 1, symbol: "A", exact: ["A"], names: ["amp", "amps", "ampere", "amperes"] },
+  { id: "mA", cat: "current", factor: 0.001, symbol: "mA", exact: ["mA"], names: ["milliamp", "milliamps"] },
+
+  // resistance, base ohm
+  { id: "ohm", cat: "resistance", factor: 1, symbol: "Ω", names: ["ohm", "ohms"] },
+  { id: "kohm", cat: "resistance", factor: 1e3, symbol: "kΩ", names: ["kohm", "kohms", "kilohm", "kilohms"] },
+
+  // capacitance, base farad ("F" alone stays Fahrenheit, so farads go by name)
+  { id: "F", cat: "capacitance", factor: 1, symbol: "F", names: ["farad", "farads"] },
+  { id: "mF", cat: "capacitance", factor: 0.001, symbol: "mF", names: ["mf", "millifarad", "millifarads"] },
+  { id: "uF", cat: "capacitance", factor: 1e-6, symbol: "µF", names: ["uf", "microfarad", "microfarads"] },
+
+  // torque, base newton-meter
+  { id: "Nm", cat: "torque", factor: 1, symbol: "Nm", names: ["nm", "newton meter", "newton meters"] },
+  { id: "lbft", cat: "torque", factor: 1.3558179483314004, symbol: "lb ft", names: ["lbft", "lb ft", "pound foot", "pound feet"] },
+
+  // squared second, only as a rate denominator for acceleration (m/s²)
+  { id: "s2", cat: "duration2", factor: 1, symbol: "s²", names: ["s²", "s2", "square second", "square seconds"] },
+
+  // pixels per inch, only for "@ 326 ppi" display-density conversions
+  { id: "ppi", cat: "density", factor: 1, symbol: "ppi", names: ["ppi"] },
 ];
 
 // Currencies. factor = USD per 1 unit, from a static fallback table (units per USD below);
@@ -309,4 +345,12 @@ export function setCurrencyRates(perUsd: Record<string, number>) {
     const u = currencyUnits.get(code.toUpperCase());
     if (u && rate > 0) u.factor = D(1).div(rate);
   }
+}
+
+// Cup sizes in liters: US customary, metric, and imperial. The cup unit's factor
+// follows this setting; settings.ts pushes the stored choice on launch and on change.
+export type CupSystem = "us" | "metric" | "imperial";
+const CUP_L: Record<CupSystem, number> = { us: 0.2365882365, metric: 0.25, imperial: 0.284131 };
+export function setCupSystem(sys: CupSystem) {
+  byId.get("cup")!.factor = D(CUP_L[sys] ?? CUP_L.us);
 }

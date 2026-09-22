@@ -1,5 +1,6 @@
 import { setWorkdayConfig, Region } from "./engine/workdays";
 import { setTaxConfig } from "./engine/tax";
+import { setCupSystem, CupSystem } from "./engine/units";
 
 export const SETTINGS_KEY = "calcool.settings.v1";
 
@@ -8,10 +9,11 @@ export interface Settings {
   hoursPerWorkday: number;
   taxName: string; // single word: VAT, GST...
   taxRate: number; // percent
+  cup: CupSystem; // US (236.6 mL), metric (250 mL), or imperial (284.1 mL)
   hotkey: string; // quick-popup accelerator; "" = automatic candidate chain
 }
 
-export const DEFAULT_SETTINGS: Settings = { region: "auto", hoursPerWorkday: 8, taxName: "VAT", taxRate: 15, hotkey: "" };
+export const DEFAULT_SETTINGS: Settings = { region: "auto", hoursPerWorkday: 8, taxName: "VAT", taxRate: 15, cup: "us", hotkey: "" };
 
 export const HOTKEY_CHOICES = ["Alt+Space", "Ctrl+Alt+Space", "Alt+Shift+Space", "Ctrl+Shift+Space", "Alt+Q"];
 
@@ -38,4 +40,5 @@ const localeRegion = (): Region => {
 export function applySettings(s: Settings = loadSettings()) {
   setWorkdayConfig({ region: s.region === "auto" ? localeRegion() : s.region, hoursPerWorkday: s.hoursPerWorkday });
   setTaxConfig({ name: s.taxName, rate: s.taxRate });
+  setCupSystem(s.cup ?? "us");
 }

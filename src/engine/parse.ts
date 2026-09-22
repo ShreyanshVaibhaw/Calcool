@@ -49,6 +49,7 @@ export type Node =
   // sales tax: add = "+ VAT", remove = "- VAT" (divides out included tax), portion = "VAT on"
   | { n: "tax"; mode: "add" | "remove" | "portion"; c: Node }
   | { n: "tc"; secs: Decimal; ff: number; rate: Node } // video timecode at a frame rate
+  | { n: "ppix"; c: Node; ppi: number } // display density: "1 cm in px @ 326 ppi"
   | { n: "cpi"; c: Node | null; from: number; to: number } // inflation-adjust money (c null: the % change itself)
   | { n: "sun"; which: "rise" | "set"; city: string; zone: string; date: Node | null };
 
@@ -488,6 +489,16 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
       M(t.from, t.to, "function");
       i++;
       continue;
+    }
+    // single capital letters with exact units ("A" for amp) beat lowercase keywords ("a")
+    if (w === "A") {
+      const u = lookupUnitWord(w);
+      if (u) {
+        S({ s: "unit", unit: u, from: t.from, to: t.to });
+        M(t.from, t.to, "unit");
+        i++;
+        continue;
+      }
     }
     if (AGGS.has(lower) || KWS.has(lower)) {
       S({ s: "kw", kw: lower === "avg" ? "average" : lower, from: t.from, to: t.to });
@@ -1054,6 +1065,29 @@ function parseSlice(sigIn: Sig[]): Node | null {
   // -- time and date phrases
   sig = stripDateAnnotations(sig);
 
+  // display density: "1 cm in px @ 326 ppi" (@ tokenizes as the word "at")
+  {
+    const dp = depths(sig);
+    for (let k = sig.length - 1; k > 0; k--) {
+      if (dp[k] !== 0 || !isKw(sig[k], "at")) continue;
+      const rt = sig.slice(k + 1);
+      if (rt.length !== 2 || rt[0].s !== "num" || rt[1].s !== "unit" || rt[1].unit.id !== "ppi") continue;
+      const ppi = rt[0].d.toNumber();
+      if (!isFinite(ppi) || ppi <= 0) continue;
+      const lhs = sig.slice(0, k);
+      const ldep = depths(lhs);
+      for (let m = lhs.length - 1; m > 0; m--) {
+        if (ldep[m] !== 0) continue;
+        const kw = lhs[m];
+        if (!(kw.s === "kw" && (kw.kw === "in" || kw.kw === "to" || kw.kw === "as" || kw.kw === "into"))) continue;
+        const tgt = lhs.slice(m + 1);
+        if (tgt.length !== 1 || tgt[0].s !== "unit" || tgt[0].unit.id !== "px") continue;
+        const len = parseSlice(lhs.slice(0, m));
+        if (len) return { n: "ppix", c: len, ppi };
+      }
+    }
+  }
+
   // conversion first, so "A to B in workdays" hands its range to the target
   // (the left side re-enters this pipeline and still becomes a date span)
   {
@@ -1453,7 +1487,8 @@ function parseExpr(sig: Sig[], pos: number, minBp: number): PE | null {
       bp = 3;
     } else if (t.s === "op" && (t.op === "*" || t.op === "/")) {
       op = t.op;
-      bp = 4;
+      // "/" binds tighter than "*" so "3 kg × 10 m/s²" reads as 3 kg × (10 m/s²)
+      bp = t.op === "/" ? 5 : 4;
     } else if (t.s === "op" && t.op === "%") {
       op = "mod"; // percent-postfix was already taken in parsePrimary; a surviving % is modulo
       bp = 4;

@@ -104,6 +104,14 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
             />
           </div>
           <div className="setting-row">
+            <label htmlFor="set-cup">Cup size</label>
+            <select id="set-cup" value={settings.cup ?? "us"} onChange={(e) => update({ cup: e.target.value as Settings["cup"] })}>
+              <option value="us">US (236.6 mL)</option>
+              <option value="metric">Metric (250 mL)</option>
+              <option value="imperial">Imperial (284.1 mL)</option>
+            </select>
+          </div>
+          <div className="setting-row">
             <label htmlFor="set-taxname">Sales-tax word</label>
             <input
               id="set-taxname"

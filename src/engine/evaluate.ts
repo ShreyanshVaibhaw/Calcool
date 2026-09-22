@@ -58,6 +58,8 @@ function convertRate(d: Decimal, num1: Unit | null, den1: Unit, num2: Unit | nul
   return out.mul(den2.factor).div(den1.factor);
 }
 
+const TWO_PI = new Decimal("6.283185307179586476925286766559");
+
 export function addValues(l: Value, r: Value): Value {
   return binop("+", l, r);
 }
@@ -178,6 +180,18 @@ export function binop(op: string, l: Value, r: Value): Value {
           const eu = unitById(joules.abs().gte(3.6e6) ? "kWh" : joules.abs().gte(3600) ? "Wh" : "J");
           return Q(fromBase(joules, eu), eu);
         }
+        // force × distance = torque: 5 N × 2 m = 10 Nm
+        const forceLen =
+          l.unit.category === "force" && r.unit.category === "length"
+            ? { f: l, t: r }
+            : l.unit.category === "length" && r.unit.category === "force"
+              ? { f: r, t: l }
+              : null;
+        if (forceLen) {
+          const nm = toBase(forceLen.f.d, forceLen.f.unit).mul(toBase(forceLen.t.d, forceLen.t.unit));
+          const tu = unitById("Nm");
+          return Q(fromBase(nm, tu), tu);
+        }
         return bad();
       }
       if (l.kind === "rate" && r.kind === "number") return R(l.d.mul(r.d), l.num, l.den);
@@ -186,6 +200,13 @@ export function binop(op: string, l: Value, r: Value): Value {
         l.kind === "rate" && r.kind === "quantity" ? { rate: l, q: r } : l.kind === "quantity" && r.kind === "rate" ? { rate: r, q: l } : null;
       if (rateQty) {
         const { rate, q } = rateQty;
+        // mass × acceleration = force: 3 kg × 10 m/s² = 30 N
+        const rnum = rate.num;
+        if (q.unit.category === "mass" && rnum && rnum.category === "length" && rate.den.id === "s2") {
+          const newtons = toBase(q.d, q.unit).mul(rate.d).mul(rnum.factor).div(rate.den.factor);
+          const nu = unitById("N");
+          return Q(fromBase(newtons, nu), nu);
+        }
         if (q.unit.category !== rate.den.category) bad();
         const count = q.unit.category === "duration" ? durationConvert(q, rate.den) : convertQty(q.d, q.unit, rate.den);
         const v = rate.d.mul(count);
@@ -696,6 +717,16 @@ export function convertValue(v: Value, t: Target): Value {
             return Q(fromBase(kmpl, t.unit), t.unit);
           }
         }
+        // angular velocity from an angle/time rate: "10 rad/s in Hz"
+        if (t.unit.category === "frequency" && v.num?.category === "angle" && v.den.category === "duration") {
+          const hz = v.d.mul(v.num.factor).div(v.den.factor).div(TWO_PI);
+          return Q(fromBase(hz, t.unit), t.unit);
+        }
+        // molarity from an amount/volume rate: "2 mol/L in M"
+        if (t.unit.category === "concentration" && v.num?.category === "amount" && v.den.category === "volume") {
+          const m = v.d.mul(v.num.factor).div(v.den.factor);
+          return Q(fromBase(m, t.unit), t.unit);
+        }
         bad();
       }
       if (v.kind === "number") return Q(v.d, t.unit);
@@ -707,6 +738,14 @@ export function convertValue(v: Value, t: Target): Value {
       if (v.kind === "quantity" && v.unit.category === "speed" && t.num.category === "length" && t.den.category === "duration") {
         const mps = toBase(v.d, v.unit);
         return R(mps.mul(t.den.factor).div(t.num.factor), t.num, t.den);
+      }
+      // angular velocity as an angle/time rate: "60 rpm in rad/s"
+      if (v.kind === "quantity" && v.unit.category === "frequency" && t.num.category === "angle" && t.den.category === "duration") {
+        return R(toBase(v.d, v.unit).mul(TWO_PI).mul(t.den.factor).div(t.num.factor), t.num, t.den);
+      }
+      // molarity as an amount/volume rate: "0.5 M in mol/L"
+      if (v.kind === "quantity" && v.unit.category === "concentration" && t.num.category === "amount" && t.den.category === "volume") {
+        return R(toBase(v.d, v.unit).mul(t.den.factor).div(t.num.factor), t.num, t.den);
       }
       if (v.kind === "number") return R(v.d, null, t.den);
       bad();
@@ -918,6 +957,16 @@ export function evalNode(node: Node, env: EvalEnv): Value {
       if (fps.lte(0)) bad();
       const secs = node.secs.plus(new Decimal(node.ff).div(fps));
       return { kind: "quantity", d: secs, unit: unitById("s"), disp: { mode: "laptime" }, fps: fps.toNumber() };
+    }
+    case "ppix": {
+      // a length at a display density becomes pixels: "1 cm in px @ 326 ppi"
+      const c = evalNode(node.c, env);
+      if (c.kind === "quantity" && c.unit.category === "length") {
+        const inches = toBase(c.d, c.unit).div(new Decimal("0.0254"));
+        return Q(inches.mul(node.ppi), unitById("px"));
+      }
+      bad();
+      break;
     }
     case "cpi": {
       const a = cpiFor(node.from);

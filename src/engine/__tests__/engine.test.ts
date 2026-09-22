@@ -4,6 +4,7 @@ import { formatValue } from "../format";
 import { todayEpoch, nearestWeekday } from "../dates";
 import { setWorkdayConfig } from "../workdays";
 import { setTaxConfig } from "../tax";
+import { setCupSystem } from "../units";
 import { Decimal } from "../value";
 
 const line = (input: string): string => evaluateSheet(input).lines[0].formatted;
@@ -282,6 +283,25 @@ const GOLDENS: [string, string][] = [
   ["US$50", "$50.00"],
   ["HK$100 in USD", "$12.82"],
 
+  // 1.8 units
+  ["2 mol in mmol", "2,000 mmol"],
+  ["500 mM in M", "0.5 M"],
+  ["2 mol/L in M", "2 M"],
+  ["0.5 M in mol/L", "0.5 mol/L"],
+  ["12 V in mV", "12,000 mV"],
+  ["2 A in mA", "2,000 mA"],
+  ["4.7 kohm in ohm", "4,700 Ω"],
+  ["1000 uF in mF", "1 mF"],
+  ["5 N × 2 m", "10 Nm"],
+  ["3 kg × 10 m/s²", "30 N"],
+  ["32 ft/s² in m/s²", "9.75 m/s²"],
+  ["10 Nm in lbft", "7.38 lb ft"],
+  ["60 rpm in rad/s", "6.28 rad/s"],
+  ["10 rad/s in Hz", "1.59 Hz"],
+  ["360 deg/s in Hz", "1 Hz"],
+  ["1 cm in px @ 326 ppi", "128.35 px"],
+  ["1 cup in ml", "236.59 mL"],
+
   // word skipping
   ["lunch was $18.50 + 20% tip", "$22.20"],
   ["answer 42 costs $10", "$10.00"],
@@ -360,6 +380,19 @@ describe("configurable sales tax", () => {
     expect(line("$100 + GST")).toBe("$118.00");
     expect(line("$300 + VAT")).toBe("$300.00"); // old word is plain prose again, word-skipped
     setTaxConfig({ name: "VAT", rate: 15 });
+  });
+});
+
+describe("cup system", () => {
+  test("metric and imperial cups convert", () => {
+    try {
+      setCupSystem("metric");
+      expect(line("1 cup in ml")).toBe("250 mL");
+      setCupSystem("imperial");
+      expect(line("1 cup in ml")).toBe("284.13 mL");
+    } finally {
+      setCupSystem("us");
+    }
   });
 });
 

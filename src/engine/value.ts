@@ -9,6 +9,7 @@ export type UnitCategory =
   | "length"
   | "mass"
   | "duration"
+  | "duration2" // squared time, only as a rate denominator (m/s²)
   | "temperature"
   | "data"
   | "speed"
@@ -21,6 +22,14 @@ export type UnitCategory =
   | "force"
   | "frequency"
   | "fuel"
+  | "amount" // moles of substance
+  | "concentration" // molarity, base mol/L
+  | "voltage"
+  | "current"
+  | "resistance"
+  | "capacitance"
+  | "torque"
+  | "density" // linear pixel density (ppi), only for "@ N ppi" conversions
   | "currency";
 
 export interface Unit {
