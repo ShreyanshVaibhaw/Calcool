@@ -229,6 +229,36 @@ const GOLDENS: [string, string][] = [
   ["0.534 to nearest 1/16", "9/16"],
   ["50% as fraction", "1/2"],
 
+  // 1.4 logic, comparisons, math
+  ["20km == 20,000 m", "true"],
+  ["5 > 3", "true"],
+  ["5 < 3", "false"],
+  ["5 != 3", "true"],
+  ["5 >= 5", "true"],
+  ["20km equals 20,000 m", "true"],
+  ["5 is 5", "true"],
+  ["if 5 > 3 then 10 else 20", "10"],
+  ["if 5 < 3 then 10 else 20", "20"],
+  ["10 unless 5 > 3", ""],
+  ["10 unless 5 < 3", "10"],
+  ["not 5 > 3", "false"],
+  ["5 > 3 and 2 < 4", "true"],
+  ["5 > 3 or 2 > 4", "true"],
+  ["assert(5 > 3)", "true"],
+  ["half of 175", "87.5"],
+  ["midpoint between 150 and 300", "225"],
+  ["larger of 100 and 200", "200"],
+  ["smaller of 100 and 200", "100"],
+  ["6 is to 60 as 8 is to what", "80"],
+  ["clamp 26 between 5 and 25", "25"],
+  ["is 59 prime", "true"],
+  ["is 60 prime", "false"],
+  ["root 5 of 100 to 2 dp", "2.51"],
+  ["npr(5, 2)", "20"],
+  ["ncr(5, 2)", "10"],
+  ["e to 4 dp", "2.7183"],
+  ["my lunch cost 5 and 3", "3"],
+
   // word skipping
   ["lunch was $18.50 + 20% tip", "$22.20"],
   ["answer 42 costs $10", "$10.00"],
@@ -247,6 +277,23 @@ describe("custom units", () => {
   test("1 watermelon = 20 lb defines a unit-like variable", () => {
     const r = evaluateSheet(["1 watermelon = 20 lb", "5 watermelons", "5 watermelons in kg", "3 watermelons + 2 watermelons"].join("\n"));
     expect(r.lines.map((l) => l.formatted)).toEqual(["20 lb", "100 lb", "45.36 kg", "100 lb"]);
+  });
+});
+
+describe("conditionals", () => {
+  test("tax = if earnings > threshold then a else b assigns the taken branch", () => {
+    const high = evaluateSheet(["earnings = $40k", "tax = if earnings > $30k then 20% else 5%", "tax of 100"].join("\n"));
+    expect(high.lines.map((l) => l.formatted)).toEqual(["$40,000.00", "20%", "20"]);
+    const low = evaluateSheet(["earnings = $20k", "tax = if earnings > $30k then 20% else 5%", "tax of 100"].join("\n"));
+    expect(low.lines.map((l) => l.formatted)).toEqual(["$20,000.00", "5%", "5"]);
+  });
+  test("random number between 1 and 10 stays in range", () => {
+    for (let i = 0; i < 50; i++) {
+      const n = parseFloat(line("random number between 1 and 10").replace(/,/g, ""));
+      expect(n).toBeGreaterThanOrEqual(1);
+      expect(n).toBeLessThanOrEqual(10);
+      expect(Number.isInteger(n)).toBe(true);
+    }
   });
 });
 

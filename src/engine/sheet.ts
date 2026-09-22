@@ -59,7 +59,7 @@ function fold(values: Value[]): Value | null {
   // values arrive bottom-up; the bottom-most compatible run wins
   let acc: Value | null = null;
   for (const v of values) {
-    if (v.kind === "percent" || v.kind === "date" || v.kind === "time") continue;
+    if (v.kind === "percent" || v.kind === "date" || v.kind === "time" || v.kind === "bool") continue;
     if (acc === null) {
       acc = v;
       continue;
@@ -80,7 +80,7 @@ function windowAggregate(name: string, out: LineOut[]): Value | null {
     if (l.kind === "empty" || l.kind === "heading" || l.kind === "aggregate") break;
     if (l.value) collected.push(l.value);
   }
-  const usable = collected.filter((v) => v.kind !== "percent" && v.kind !== "date" && v.kind !== "time");
+  const usable = collected.filter((v) => v.kind !== "percent" && v.kind !== "date" && v.kind !== "time" && v.kind !== "bool");
   if (!usable.length) return null;
   try {
     switch (name) {

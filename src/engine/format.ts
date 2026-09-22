@@ -116,6 +116,8 @@ export function formatValue(v: Value): string {
     }
     case "percent":
       return formatDecimal(v.d, { maxDp: disp.dp ?? 2, si: false }) + "%";
+    case "bool":
+      return v.b ? "true" : "false";
     case "quantity": {
       if (disp.mode === "hm") {
         const total = Math.round(v.d.toNumber());

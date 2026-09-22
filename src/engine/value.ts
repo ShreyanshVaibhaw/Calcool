@@ -56,6 +56,7 @@ export type Value =
   | { kind: "quantity"; d: Decimal; unit: Unit; disp?: Disp; cal?: CalParts; range?: { a: number; b: number }; dens?: Decimal; fps?: number } // range: date-span epoch days; dens: substance g/ml; fps: timecode frame rate
   | { kind: "rate"; d: Decimal; num: Unit | null; den: Unit; disp?: Disp } // $/hour, km/day, 30/week
   | { kind: "date"; d: Decimal; disp?: Disp } // d = epoch day (days since 1970-01-01)
+  | { kind: "bool"; b: boolean; d: Decimal; disp?: Disp } // true/false; d mirrors b (1/0) so generic d-access compiles
   | { kind: "time"; d: Decimal; zone?: string; anchored?: boolean; disp?: Disp }; // d = epoch minutes; anchored = tied to a real date/zone
 
 export const num = (d: Decimal.Value): Value => ({ kind: "number", d: new Decimal(d) });

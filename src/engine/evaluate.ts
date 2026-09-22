@@ -24,6 +24,7 @@ const N = (d: Decimal): Value => ({ kind: "number", d });
 const P = (d: Decimal): Value => ({ kind: "percent", d });
 const Q = (d: Decimal, unit: Unit): Value => ({ kind: "quantity", d, unit });
 const R = (d: Decimal, num: Unit | null, den: Unit): Value => ({ kind: "rate", d, num, den });
+const B = (b: boolean): Value => ({ kind: "bool", b, d: new Decimal(b ? 1 : 0) });
 
 const pctFactor = (p: Decimal, sign: 1 | -1 | 0): Decimal =>
   sign === 0 ? p.div(100) : new Decimal(1).plus(p.div(100).mul(sign));
@@ -59,6 +60,20 @@ function convertRate(d: Decimal, num1: Unit | null, den1: Unit, num2: Unit | nul
 
 export function addValues(l: Value, r: Value): Value {
   return binop("+", l, r);
+}
+
+// Ordering for comparisons: same-kind scalars compare directly, quantities in base units.
+function cmpVals(l: Value, r: Value): number {
+  if (l.kind === "number" && r.kind === "number") return l.d.cmp(r.d);
+  if (l.kind === "percent" && r.kind === "percent") return l.d.cmp(r.d);
+  if (l.kind === "quantity" && r.kind === "quantity") {
+    if (l.unit.category !== r.unit.category) bad();
+    return toBase(l.d, l.unit).cmp(toBase(r.d, r.unit));
+  }
+  if (l.kind === "date" && r.kind === "date") return l.d.cmp(r.d);
+  if (l.kind === "time" && r.kind === "time") return l.d.cmp(r.d);
+  if (l.kind === "bool" && r.kind === "bool") return l.b === r.b ? 0 : l.b ? 1 : -1;
+  return bad();
 }
 
 export function binop(op: string, l: Value, r: Value): Value {
@@ -224,6 +239,26 @@ export function binop(op: string, l: Value, r: Value): Value {
         return N(l.d.mod(r.d));
       }
       return bad();
+    }
+
+    case "==":
+    case "!=":
+    case ">":
+    case "<":
+    case ">=":
+    case "<=": {
+      const c = cmpVals(l, r);
+      const ok =
+        op === "==" ? c === 0 : op === "!=" ? c !== 0 : op === ">" ? c > 0 : op === "<" ? c < 0 : op === ">=" ? c >= 0 : c <= 0;
+      return B(ok);
+    }
+
+    case "and":
+    case "or": {
+      if (l.kind !== "bool" || r.kind !== "bool") bad();
+      const lb = (l as Extract<Value, { kind: "bool" }>).b;
+      const rb = (r as Extract<Value, { kind: "bool" }>).b;
+      return B(op === "and" ? lb && rb : lb || rb);
     }
 
     case "&":
@@ -399,6 +434,19 @@ function foldSum(args: Value[]): Value {
   return acc!;
 }
 
+// Primality for "is 59 prime": trial division, capped so huge inputs stay silent.
+function isPrime(d: Decimal): boolean {
+  if (!d.isInteger() || d.lt(2)) return false;
+  if (d.lte(3)) return true;
+  if (d.gt(1e12)) bad();
+  const n = d.toNumber();
+  if (n % 2 === 0 || n % 3 === 0) return false;
+  for (let i = 5; i * i <= n; i += 6) {
+    if (n % i === 0 || n % (i + 2) === 0) return false;
+  }
+  return true;
+}
+
 function applyFn(name: string, args: Value[]): Value {
   const one = args[0];
   const asNum = (v: Value): Decimal => {
@@ -476,14 +524,92 @@ function applyFn(name: string, args: Value[]): Value {
     case "tanh":
       return mathFn(Math.tanh);
     case "min":
-    case "max": {
+    case "max":
+    case "larger":
+    case "smaller": {
       if (!args.length) bad();
+      const wantMax = name === "max" || name === "larger";
       let best = args[0];
       for (const v of args.slice(1)) {
-        const better = name === "min" ? baseKey(v).lt(baseKey(best)) : baseKey(v).gt(baseKey(best));
+        const better = wantMax ? baseKey(v).gt(baseKey(best)) : baseKey(v).lt(baseKey(best));
         if (better) best = v;
       }
       return best;
+    }
+    case "midpoint": {
+      if (args.length !== 2) bad();
+      return binop("/", binop("+", args[0], args[1]), N(new Decimal(2)));
+    }
+    case "half": {
+      return binop("/", one, N(new Decimal(2)));
+    }
+    case "root": {
+      // args are [x, degree]: "root 5 of 100" is 100^(1/5)
+      if (args.length !== 2 || args[0].kind !== "number" || args[1].kind !== "number") bad();
+      const x = (args[0] as Extract<Value, { kind: "number" }>).d;
+      const n = (args[1] as Extract<Value, { kind: "number" }>).d;
+      if (n.isZero()) bad();
+      const y = Decimal.pow(x, new Decimal(1).div(n));
+      if (!y.isFinite()) bad();
+      return N(y);
+    }
+    case "clamp": {
+      if (args.length !== 3) bad();
+      const [x, lo, hi] = args;
+      if (x.kind !== "number" || lo.kind !== "number" || hi.kind !== "number") bad();
+      const xv = (x as Extract<Value, { kind: "number" }>).d;
+      const lov = (lo as Extract<Value, { kind: "number" }>).d;
+      const hiv = (hi as Extract<Value, { kind: "number" }>).d;
+      const low = Decimal.min(lov, hiv);
+      const high = Decimal.max(lov, hiv);
+      return N(Decimal.min(Decimal.max(xv, low), high));
+    }
+    case "npr":
+    case "perm":
+    case "ncr":
+    case "comb": {
+      if (args.length !== 2) bad();
+      const [nv, kv] = args;
+      if (nv.kind !== "number" || kv.kind !== "number") bad();
+      const n = (nv as Extract<Value, { kind: "number" }>).d;
+      const k = (kv as Extract<Value, { kind: "number" }>).d;
+      if (!n.isInteger() || !k.isInteger() || n.isNeg() || k.isNeg() || k.gt(n) || n.gt(1000)) bad();
+      const ni = n.toNumber();
+      const ki = k.toNumber();
+      let acc = new Decimal(1);
+      for (let i = ni - ki + 1; i <= ni; i++) acc = acc.mul(i);
+      if (name === "npr" || name === "perm") return N(acc);
+      let div = new Decimal(1);
+      for (let i = 2; i <= ki; i++) div = div.mul(i);
+      return N(acc.div(div));
+    }
+    case "random": {
+      if (args.length !== 2) bad();
+      const [av, bv] = args;
+      if (av.kind !== "number" || bv.kind !== "number") bad();
+      const a = (av as Extract<Value, { kind: "number" }>).d.toNumber();
+      const b = (bv as Extract<Value, { kind: "number" }>).d.toNumber();
+      if (!isFinite(a) || !isFinite(b)) bad();
+      const lo = Math.min(a, b);
+      const hi = Math.max(a, b);
+      if (Number.isInteger(a) && Number.isInteger(b)) {
+        return N(new Decimal(lo + Math.floor(Math.random() * (hi - lo + 1))));
+      }
+      return N(new Decimal(lo + Math.random() * (hi - lo)));
+    }
+    case "rule3": {
+      // "6 is to 60 as 8 is to what": c * b / a
+      if (args.length !== 3) bad();
+      return binop("/", binop("*", args[2], args[1]), args[0]);
+    }
+    case "isprime": {
+      if (one.kind !== "number") bad();
+      const d = (one as Extract<Value, { kind: "number" }>).d;
+      return B(isPrime(d));
+    }
+    case "assert": {
+      if (one.kind !== "bool" || !one.b) bad();
+      return B(true);
     }
     case "total":
     case "sum":
@@ -634,7 +760,22 @@ export function evalNode(node: Node, env: EvalEnv): Value {
       return node.v;
     case "neg": {
       const c = evalNode(node.c, env);
+      if (c.kind === "bool") bad();
       return { ...c, d: c.d.neg() };
+    }
+    case "not": {
+      const c = evalNode(node.c, env);
+      if (c.kind !== "bool") bad();
+      return B(!(c as Extract<Value, { kind: "bool" }>).b);
+    }
+    case "if": {
+      const c = evalNode(node.cond, env);
+      if (c.kind !== "bool") bad();
+      if (!(c as Extract<Value, { kind: "bool" }>).b) {
+        if (!node.e) bad();
+        return evalNode(node.e as Node, env);
+      }
+      return evalNode(node.t, env);
     }
     case "bin":
       return binop(node.op, evalNode(node.l, env), evalNode(node.r, env));

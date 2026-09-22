@@ -36,6 +36,8 @@ export type Node =
   | { n: "what"; form: "of" | "off" | "on"; x: Node; p: Node } // x is p% of what
   | { n: "change"; a: Node; b: Node } // a to b as %
   | { n: "ratio"; a: Node; b: Node } // b/a as multiplier: 50 to 75 is what x, 100 is what multiple of 50
+  | { n: "if"; cond: Node; t: Node; e: Node | null } // if cond then t else e; lazy, only the taken branch evaluates
+  | { n: "not"; c: Node } // logical not on a boolean
   | { n: "ref"; idx: number }
   | { n: "var"; name: string }
   | { n: "span"; a: Node; b: Node; unit?: Unit } // distance between two dates
@@ -78,18 +80,21 @@ type Sig =
   | { s: "comma"; from: number; to: number };
 
 const KWS = new Set([
-  "of", "off", "on", "in", "to", "as", "into", "at", "per", "is", "what", "a", "an", "and", "mod", "nearest", "dp", "digits",
+  "of", "off", "on", "in", "to", "as", "into", "at", "per", "is", "what", "a", "an", "and", "or", "not", "mod", "nearest", "dp", "digits",
   "after", "before", "from", "since", "until", "till", "ago", "left", "between", "next", "last", "time",
   // finance phrases
   "interest", "compounding", "compounded", "repayment", "repayments", "payment", "payments", "over",
   "annual", "annually", "annualized", "yearly", "monthly", "weekly", "daily", "quarterly", "return", "invested", "returned",
   "worth", "inflation", "sunrise", "sunset",
+  // logic phrases
+  "then", "else", "if", "unless", "equals", "prime", "random",
 ]);
 export const AGGS = new Set(["total", "sum", "average", "avg", "count", "median"]);
 const FNS = new Set([
   "sqrt", "cbrt", "abs", "round", "ceil", "floor", "fact", "factorial", "ln", "log", "log2", "log10", "exp",
   "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "sind", "cosd", "tand", "min", "max",
   "hex", "bin", "oct", "int",
+  "half", "root", "midpoint", "larger", "smaller", "clamp", "npr", "ncr", "perm", "comb", "assert",
 ]);
 const FMTS = new Set(["hex", "hexadecimal", "binary", "bin", "octal", "oct", "decimal", "dec", "number", "num", "fraction", "percent", "percentage", "sci", "scientific", "pitch", "frames", "multiplier", "multiple", "multiples", "x"]);
 // Plain number words: zero to ninety plus hundred/thousand/million/billion/trillion.
@@ -111,6 +116,7 @@ const CONSTS: Record<string, Decimal> = {
   "π": PI,
   tau: PI.mul(2),
   phi: new Decimal("1.618033988749894848204586834365638"),
+  e: new Decimal("2.718281828459045235360287471352662"),
 };
 const MULTS: Record<string, Decimal> = {
   thousand: new Decimal(1e3),
@@ -271,8 +277,9 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
     }
     if (t.t === "op") {
       if (t.op === "=" || t.op === "==" || t.op === "!=" || t.op === ">=" || t.op === "<=" || t.op === "<" || t.op === ">") {
-        // comparisons/assignments are handled upstream or dropped; "cmp" forces an expression boundary
-        S({ s: "op", op: "cmp", spacedL: true, from: t.from, to: t.to });
+        // "=" outside an assignment line reads as equality; the rest are comparisons
+        S({ s: "op", op: t.op === "=" ? "==" : t.op, spacedL: true, from: t.from, to: t.to });
+        M(t.from, t.to, "operator");
         i++;
         continue;
       }
@@ -730,6 +737,44 @@ function parseSlice(sigIn: Sig[]): Node | null {
   const dep = depths(sig);
   const at0 = (k: number) => dep[k] === 0;
 
+  // -- if/unless: "if 5 > 3 then 10 else 20", "tax = if earnings > $30k then 20% else 5%", "10 unless 5 > 3"
+  // Branches are expressions; for assignment use "name = if cond then a else b".
+  {
+    const first = sig[0];
+    if ((isKw(first, "if") || isKw(first, "unless")) && at0(0)) {
+      const neg = isKw(first, "unless");
+      let thenAt = -1;
+      for (let k = 1; k < sig.length; k++) {
+        if (at0(k) && isKw(sig[k], "then")) {
+          thenAt = k;
+          break;
+        }
+      }
+      if (thenAt > 1) {
+        let elseAt = -1;
+        for (let k = thenAt + 1; k < sig.length; k++) {
+          if (at0(k) && isKw(sig[k], "else")) {
+            elseAt = k;
+            break;
+          }
+        }
+        const cond = parseSlice(sig.slice(1, thenAt));
+        const t = parseSlice(sig.slice(thenAt + 1, elseAt === -1 ? sig.length : elseAt));
+        const e = elseAt === -1 ? null : parseSlice(sig.slice(elseAt + 1));
+        if (cond && t && (elseAt === -1 || e)) {
+          return { n: "if", cond: neg ? { n: "not", c: cond } : cond, t, e };
+        }
+      }
+    }
+    for (let k = 1; k < sig.length - 1; k++) {
+      if (at0(k) && isKw(sig[k], "unless")) {
+        const t = parseSlice(sig.slice(0, k));
+        const c = parseSlice(sig.slice(k + 1));
+        if (t && c) return { n: "if", cond: { n: "not", c }, t, e: null };
+      }
+    }
+  }
+
   // -- change: "50 to 75 is what %" / "50 to 75 as %"
   {
     const n = sig.length;
@@ -792,6 +837,37 @@ function parseSlice(sigIn: Sig[]): Node | null {
     if (x && y) return { n: "ratio", a: y, b: x };
   }
 
+  // -- rule of three: "6 is to 60 as 8 is to what" -> 80
+  {
+    for (let k = 1; k < sig.length - 1; k++) {
+      if (!at0(k) || !isKw(sig[k], "as")) continue;
+      const left = sig.slice(0, k);
+      const right = sig.slice(k + 1);
+      const ldep = depths(left);
+      let a: Node | null = null;
+      let b: Node | null = null;
+      for (let m = 1; m < left.length - 2; m++) {
+        if (ldep[m] !== 0 || !isKw(left[m], "is") || !isKw(left[m + 1], "to")) continue;
+        const aa = parseSlice(left.slice(0, m));
+        const bb = parseSlice(left.slice(m + 2));
+        if (aa && bb) {
+          a = aa;
+          b = bb;
+          break;
+        }
+      }
+      if (!a || !b) continue;
+      const rdep = depths(right);
+      for (let m = 1; m < right.length - 1; m++) {
+        if (rdep[m] !== 0 || !isKw(right[m], "is") || !isKw(right[m + 1], "to")) continue;
+        const rest = right.slice(m + 2);
+        if (rest.length !== 1 || !isKw(rest[0], "what")) continue;
+        const c = parseSlice(right.slice(0, m));
+        if (c) return { n: "fn", name: "rule3", args: [a, b, c] };
+      }
+    }
+  }
+
   // -- "x is what % of y" / "x as a % of y" (of|off|on)
   for (let i = 1; i < sig.length; i++) {
     if (!at0(i)) continue;
@@ -825,6 +901,81 @@ function parseSlice(sigIn: Sig[]): Node | null {
           }
         }
       }
+    }
+  }
+
+  // -- "midpoint between 150 and 300"
+  if (sig[0]?.s === "fn" && sig[0].name === "midpoint" && isKw(sig[1], "between")) {
+    for (let k = 2; k < sig.length; k++) {
+      if (at0(k) && isKw(sig[k], "and")) {
+        const a = parseSlice(sig.slice(2, k));
+        const b = parseSlice(sig.slice(k + 1));
+        if (a && b) return { n: "fn", name: "midpoint", args: [a, b] };
+      }
+    }
+  }
+
+  // -- "larger of 100 and 200" / "smaller of 100 and 200"
+  if (sig[0]?.s === "fn" && (sig[0].name === "larger" || sig[0].name === "smaller")) {
+    const fname = sig[0].name;
+    if (isKw(sig[1], "of")) {
+      for (let k = 2; k < sig.length; k++) {
+        if (at0(k) && isKw(sig[k], "and")) {
+          const a = parseSlice(sig.slice(2, k));
+          const b = parseSlice(sig.slice(k + 1));
+          if (a && b) return { n: "fn", name: fname, args: [a, b] };
+        }
+      }
+    }
+  }
+
+  // -- "clamp 26 between 5 and 25"
+  if (sig[0]?.s === "fn" && sig[0].name === "clamp") {
+    let btw = -1;
+    for (let k = 1; k < sig.length; k++) {
+      if (at0(k) && isKw(sig[k], "between")) {
+        btw = k;
+        break;
+      }
+    }
+    if (btw > 1) {
+      for (let k = btw + 1; k < sig.length; k++) {
+        if (at0(k) && isKw(sig[k], "and")) {
+          const x = parseSlice(sig.slice(1, btw));
+          const lo = parseSlice(sig.slice(btw + 1, k));
+          const hi = parseSlice(sig.slice(k + 1));
+          if (x && lo && hi) return { n: "fn", name: "clamp", args: [x, lo, hi] };
+        }
+      }
+    }
+  }
+
+  // -- "random number between 1 and 10"
+  if (isKw(sig[0], "random")) {
+    let j = 1;
+    const sj = sig[j];
+    if (sj?.s === "fmt" && sj.fmt === "number") j++;
+    if (isKw(sig[j], "between")) {
+      for (let k = j + 1; k < sig.length; k++) {
+        if (at0(k) && isKw(sig[k], "and")) {
+          const a = parseSlice(sig.slice(j + 1, k));
+          const b = parseSlice(sig.slice(k + 1));
+          if (a && b) return { n: "fn", name: "random", args: [a, b] };
+        }
+      }
+    }
+  }
+
+  // -- "is 59 prime" / "59 is prime"
+  {
+    for (let k = 0; k < sig.length; k++) {
+      if (!at0(k) || !isKw(sig[k], "prime")) continue;
+      let inner = sig.slice(0, k);
+      if (inner.length && isKw(inner[0], "is")) inner = inner.slice(1);
+      else if (inner.length && isKw(inner[inner.length - 1], "is")) inner = inner.slice(0, -1);
+      else continue;
+      const c = parseSlice(inner);
+      if (c) return { n: "fn", name: "isprime", args: [c] };
     }
   }
 
@@ -867,6 +1018,54 @@ function parseSlice(sigIn: Sig[]): Node | null {
   if (timeNode) return timeNode;
   const dateNode = dateScans(sig);
   if (dateNode) return dateNode;
+
+  // -- logic: or splits loosest, then and, then comparisons. and/or only fire when a side
+  // looks boolean, so prose like "5 and 3" keeps its last-valid-expression answer.
+  const isCompOp = (t: Sig | undefined): string | null =>
+    t?.s === "op" && (t.op === "==" || t.op === "!=" || t.op === ">" || t.op === "<" || t.op === ">=" || t.op === "<=") ? t.op : null;
+  const sliceHasBool = (toks: Sig[]): boolean => {
+    const dp = depths(toks);
+    return toks.some((t, k) => {
+      if (dp[k] !== 0) return false;
+      if (t.s === "op" && (t.op === "==" || t.op === "!=" || t.op === ">" || t.op === "<" || t.op === ">=" || t.op === "<=")) return true;
+      if (t.s === "kw" && (t.kw === "is" || t.kw === "equals" || t.kw === "not" || t.kw === "or" || t.kw === "and")) return true;
+      if (t.s === "fn" && (t.name === "assert" || t.name === "isprime")) return true;
+      return false;
+    });
+  };
+  // leading not: "not 5 > 3"
+  if (isKw(sig[0], "not") && at0(0) && sliceHasBool(sig.slice(1))) {
+    const c = parseSlice(sig.slice(1));
+    if (c) return { n: "not", c };
+  }
+  for (let k = 1; k < sig.length - 1; k++) {
+    if (!at0(k) || !isKw(sig[k], "or")) continue;
+    const l = sig.slice(0, k);
+    const r = sig.slice(k + 1);
+    if (!l.length || !r.length || !(sliceHasBool(l) || sliceHasBool(r))) continue;
+    const a = parseSlice(l);
+    const b = parseSlice(r);
+    if (a && b) return { n: "bin", op: "or", l: a, r: b };
+  }
+  for (let k = 1; k < sig.length - 1; k++) {
+    if (!at0(k) || !isKw(sig[k], "and")) continue;
+    const l = sig.slice(0, k);
+    const r = sig.slice(k + 1);
+    if (!l.length || !r.length || !(sliceHasBool(l) || sliceHasBool(r))) continue;
+    const a = parseSlice(l);
+    const b = parseSlice(r);
+    if (a && b) return { n: "bin", op: "and", l: a, r: b };
+  }
+  for (let k = 1; k < sig.length - 1; k++) {
+    if (!at0(k)) continue;
+    const t = sig[k];
+    let op: string | null = isCompOp(t);
+    if (!op && (isKw(t, "is") || isKw(t, "equals"))) op = "==";
+    if (!op) continue;
+    const a = parseSlice(sig.slice(0, k));
+    const b = parseSlice(sig.slice(k + 1));
+    if (a && b) return { n: "bin", op, l: a, r: b };
+  }
 
   // -- strip filler; "a"/"an" before a unit means "per"
   const STRIP = new Set(["is", "what", "and", "an", "a", "from", "after", "before", "since", "until", "till", "ago", "between", "left", "next", "last", "time", "timediff"]);
@@ -1196,6 +1395,12 @@ function parseExpr(sig: Sig[], pos: number, minBp: number): PE | null {
     } else if (t.s === "kw" && t.kw === "at") {
       op = "at"; // binds looser than "/" so "30 hours at $30/hour" sees the whole rate
       bp = 3;
+    } else if (t.s === "op" && (t.op === "==" || t.op === "!=" || t.op === ">" || t.op === "<" || t.op === ">=" || t.op === "<=")) {
+      op = t.op; // comparisons nest inside parens; top-level ones are split before stripping
+      bp = 0.25;
+    } else if (t.s === "kw" && t.kw === "or") {
+      op = "or";
+      bp = 0.1;
     } else if (t.s === "op" && t.op === "^") {
       op = "^";
       bp = 6;
@@ -1370,6 +1575,29 @@ function parsePrimary(sig: Sig[], pos: number): PE | null {
   }
   if (t.s === "op" && t.op === "+") return parseExpr(sig, pos + 1, 5);
 
+  // logical not; only when a boolean follows somewhere in its group, otherwise prose
+  if (t.s === "kw" && t.kw === "not") {
+    const d0 = depths(sig);
+    let found = false;
+    for (let k = pos + 1; k < sig.length; k++) {
+      if (d0[k] < d0[pos]) break;
+      if (d0[k] !== d0[pos]) continue;
+      const u = sig[k];
+      if (
+        (u.s === "op" && (u.op === "==" || u.op === "!=" || u.op === ">" || u.op === "<" || u.op === ">=" || u.op === "<=")) ||
+        (u.s === "kw" && (u.kw === "or" || u.kw === "and" || u.kw === "not")) ||
+        (u.s === "fn" && (u.name === "assert" || u.name === "isprime"))
+      ) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) return null;
+    const c = parseExpr(sig, pos + 1, 0.2);
+    if (!c) return null;
+    return { node: { n: "not", c: c.node }, pos: c.pos };
+  }
+
   if (t.s === "lp") {
     const inner = parseExpr(sig, pos + 1, 0);
     if (!inner) return null;
@@ -1396,6 +1624,14 @@ function parsePrimary(sig: Sig[], pos: number): PE | null {
       }
       if (sig[p]?.s !== "rp") return null;
       return { node: { n: "fn", name: t.name, args }, pos: p + 1 };
+    }
+    // "root 5 of 100" means 100^(1/5); args are stored [x, degree]
+    if (t.name === "root") {
+      const deg = parseExpr(sig, p, 5);
+      if (deg && isKw(sig[deg.pos], "of")) {
+        const x = parseExpr(sig, deg.pos + 1, 5);
+        if (x) return { node: { n: "fn", name: "root", args: [x.node, deg.node] }, pos: x.pos };
+      }
     }
     if (isKw(sig[p], "of")) p++;
     const a = parseExpr(sig, p, 5);
