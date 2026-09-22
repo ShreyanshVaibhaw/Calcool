@@ -556,6 +556,10 @@ export function convertValue(v: Value, t: Target): Value {
           if (v.kind === "number") return { ...v, disp: { ...v.disp, mode: t.fmt } };
           bad();
           break;
+        case "multiplier":
+          if (v.kind === "number") return { ...v, disp: { ...v.disp, mode: "multiplier" } };
+          bad();
+          break;
         case "pitch":
           // 440 hz as pitch = A4
           if (v.kind === "quantity" && v.unit.category === "frequency" && v.d.gt(0)) return { ...v, disp: { ...v.disp, mode: "pitch" } };
@@ -631,6 +635,12 @@ export function evalNode(node: Node, env: EvalEnv): Value {
       const b = phraseKey(evalNode(node.b, env));
       if (a.isZero()) bad();
       return P(b.minus(a).div(a).mul(100));
+    }
+    case "ratio": {
+      const a = phraseKey(evalNode(node.a, env));
+      const b = phraseKey(evalNode(node.b, env));
+      if (a.isZero()) bad();
+      return { kind: "number", d: b.div(a), disp: { mode: "multiplier" } };
     }
     case "ref": {
       const v = env.lineValues[node.idx];

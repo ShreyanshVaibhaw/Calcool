@@ -111,6 +111,7 @@ export function formatValue(v: Value): string {
       if (disp.mode === "hex" || disp.mode === "bin" || disp.mode === "oct") return baseFmt(v.d, disp.mode);
       if (disp.mode === "sci") return sci(v.d);
       if (disp.mode === "fraction") return fraction(v.d);
+      if (disp.mode === "multiplier") return formatDecimal(v.d, { maxDp: disp.dp ?? 10, si: false }) + "x";
       return formatDecimal(v.d, { maxDp: disp.dp ?? 10, si: disp.dp === undefined });
     }
     case "percent":

@@ -35,6 +35,7 @@ export type Node =
   | { n: "aspct"; form: "of" | "off" | "on"; x: Node; y: Node } // x is what % of y
   | { n: "what"; form: "of" | "off" | "on"; x: Node; p: Node } // x is p% of what
   | { n: "change"; a: Node; b: Node } // a to b as %
+  | { n: "ratio"; a: Node; b: Node } // b/a as multiplier: 50 to 75 is what x, 100 is what multiple of 50
   | { n: "ref"; idx: number }
   | { n: "var"; name: string }
   | { n: "span"; a: Node; b: Node; unit?: Unit } // distance between two dates
@@ -89,7 +90,20 @@ const FNS = new Set([
   "sqrt", "cbrt", "abs", "round", "ceil", "floor", "fact", "factorial", "ln", "log", "log2", "log10", "exp",
   "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "sind", "cosd", "tand", "min", "max",
 ]);
-const FMTS = new Set(["hex", "hexadecimal", "binary", "bin", "octal", "oct", "decimal", "dec", "number", "num", "fraction", "percent", "percentage", "sci", "scientific", "pitch", "frames"]);
+const FMTS = new Set(["hex", "hexadecimal", "binary", "bin", "octal", "oct", "decimal", "dec", "number", "num", "fraction", "percent", "percentage", "sci", "scientific", "pitch", "frames", "multiplier", "multiple", "multiples", "x"]);
+// Plain number words: zero to ninety plus hundred/thousand/million/billion/trillion.
+// Hyphenated tens like twenty-one arrive as word, op(-), word so the scanner skips the hyphen.
+const SMALL_WORDS: Record<string, number> = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
+  ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16,
+  seventeen: 17, eighteen: 18, nineteen: 19,
+};
+const TENS_WORDS: Record<string, number> = {
+  twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
+};
+const SCALE_WORDS: Record<string, number> = {
+  hundred: 100, thousand: 1e3, million: 1e6, billion: 1e9, trillion: 1e12,
+};
 const PI = new Decimal("3.141592653589793238462643383279503");
 const CONSTS: Record<string, Decimal> = {
   pi: PI,
@@ -111,6 +125,89 @@ const WORD_OPS: Record<string, string> = { plus: "+", minus: "-", times: "*" };
 
 export function normalizeVarName(name: string): string {
   return name.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function isNumberWord(w: string): boolean {
+  return SMALL_WORDS[w] !== undefined || TENS_WORDS[w] !== undefined || SCALE_WORDS[w] !== undefined;
+}
+
+// Longest run of number words starting at raw[start]. Returns null when no clean number starts here.
+// "a" only counts as 1 before hundred/thousand/million/billion/trillion.
+function tryNumberWords(raw: ReturnType<typeof tokenize>, start: number): { value: number; next: number; from: number; to: number } | null {
+  const first = raw[start];
+  if (!first || first.t !== "word") return null;
+  const fl = first.w.toLowerCase();
+  if (fl === "and") return null;
+  if (!isNumberWord(fl) && fl !== "a") return null;
+  if (fl === "a") {
+    const nxt = raw[start + 1];
+    if (!nxt || nxt.t !== "word" || SCALE_WORDS[nxt.w.toLowerCase()] === undefined) return null;
+  }
+  let total = 0;
+  let cur = 0;
+  let seen = false;
+  let idx = start;
+  while (idx < raw.length) {
+    const tok = raw[idx];
+    if (tok.t === "word") {
+      const lw = tok.w.toLowerCase();
+      if (lw === "and") {
+        const nxt = raw[idx + 1];
+        if (nxt && nxt.t === "word" && isNumberWord(nxt.w.toLowerCase())) {
+          idx++;
+          continue;
+        }
+        break;
+      }
+      if (SMALL_WORDS[lw] !== undefined) {
+        cur += SMALL_WORDS[lw];
+        seen = true;
+        idx++;
+        continue;
+      }
+      if (TENS_WORDS[lw] !== undefined) {
+        cur += TENS_WORDS[lw];
+        seen = true;
+        idx++;
+        continue;
+      }
+      if (lw === "hundred") {
+        if (cur === 0) cur = 1;
+        cur *= 100;
+        seen = true;
+        idx++;
+        continue;
+      }
+      if (SCALE_WORDS[lw] !== undefined) {
+        if (cur === 0) cur = 1;
+        cur *= SCALE_WORDS[lw];
+        total += cur;
+        cur = 0;
+        seen = true;
+        idx++;
+        continue;
+      }
+      if (lw === "a" && idx === start) {
+        cur += 1;
+        idx++;
+        continue;
+      }
+      break;
+    }
+    if (tok.t === "op" && tok.op === "-" && !tok.spacedL) {
+      const prev = raw[idx - 1];
+      const nxt = raw[idx + 1];
+      if (prev && prev.t === "word" && nxt && nxt.t === "word" && isNumberWord(prev.w.toLowerCase()) && isNumberWord(nxt.w.toLowerCase())) {
+        idx++;
+        continue;
+      }
+      break;
+    }
+    break;
+  }
+  if (!seen) return null;
+  total += cur;
+  return { value: total, next: idx, from: first.from, to: raw[idx - 1].to };
 }
 
 // ---------------------------------------------------------------------------
@@ -237,6 +334,18 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
         S({ s: "var", name, from: t.from, to: end });
         M(t.from, end, "variable");
         i += matched;
+        continue;
+      }
+    }
+
+    // number words: five hundred thirty three, twenty-one, a hundred. Variables win above.
+    // A word scale right after a digit stays on the digit path (1.4 million), so skip there.
+    if (raw[i - 1]?.t !== "num") {
+      const nw = tryNumberWords(raw, i);
+      if (nw) {
+        S({ s: "num", d: new Decimal(nw.value), from: nw.from, to: nw.to });
+        M(nw.from, nw.to, "number");
+        i = nw.next;
         continue;
       }
     }
@@ -607,6 +716,46 @@ function parseSlice(sigIn: Sig[]): Node | null {
     }
   }
 
+  const isMultFmt = (t: Sig | undefined): boolean =>
+    !!t && t.s === "fmt" && (t.fmt === "multiplier" || t.fmt === "multiple" || t.fmt === "multiples" || t.fmt === "x");
+
+  // -- ratio: "50 to 75 is what x" / "50 to 75 as multiplier"
+  {
+    const n = sig.length;
+    const last = sig[n - 1];
+    if (last && isMultFmt(last) && at0(n - 1)) {
+      let head = -1;
+      if (isKw(sig[n - 3], "is") && isKw(sig[n - 2], "what")) head = n - 3;
+      else if (isKw(sig[n - 2], "as")) head = n - 2;
+      else if (isKw(sig[n - 3], "as") && isKw(sig[n - 2], "a")) head = n - 3;
+      if (head > 0) {
+        for (let t = 0; t < head; t++) {
+          if (isKw(sig[t], "to") && at0(t) && t > 0) {
+            const a = parseSlice(sig.slice(0, t));
+            const b = parseSlice(sig.slice(t + 1, head));
+            if (a && b) return { n: "ratio", a, b };
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // -- ratio: "100 is what multiple of 50" / "100 as multiple of 50"
+  for (let i = 1; i < sig.length; i++) {
+    if (!at0(i)) continue;
+    const t = sig[i];
+    if (!(isKw(t, "is") || isKw(t, "as"))) continue;
+    let j = i + 1;
+    if (isKw(sig[j], "what") || isKw(sig[j], "a")) j++;
+    if (!isMultFmt(sig[j])) continue;
+    j++;
+    if (!isKw(sig[j], "of")) continue;
+    const x = parseSlice(sig.slice(0, i));
+    const y = parseSlice(sig.slice(j + 1));
+    if (x && y) return { n: "ratio", a: y, b: x };
+  }
+
   // -- "x is what % of y" / "x as a % of y" (of|off|on)
   for (let i = 1; i < sig.length; i++) {
     if (!at0(i)) continue;
@@ -881,7 +1030,7 @@ function parseTarget(toks: Sig[]): Target | null {
   const a = toks[0];
   if (toks.length === 1) {
     if (a.s === "fmt") {
-      const map: Record<string, string> = { hexadecimal: "hex", binary: "bin", octal: "oct", decimal: "dec", number: "num", percentage: "percent", scientific: "sci" };
+      const map: Record<string, string> = { hexadecimal: "hex", binary: "bin", octal: "oct", decimal: "dec", number: "num", percentage: "percent", scientific: "sci", multiple: "multiplier", multiples: "multiplier", x: "multiplier" };
       return { k: "fmt", fmt: map[a.fmt] ?? a.fmt };
     }
     if (a.s === "op" && a.op === "%") return { k: "fmt", fmt: "percent" };

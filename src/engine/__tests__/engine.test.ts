@@ -195,6 +195,20 @@ const GOLDENS: [string, string][] = [
   ["total of 3, 4, 7 and 9", "23"],
   ["average of 36, 42, 19 and 81", "44.5"],
 
+  // 1.1 number words and multipliers
+  ["five hundred thirty three", "533"],
+  ["twenty-one plus 9", "30"],
+  ["one hundred and five", "105"],
+  ["a hundred plus 5", "105"],
+  ["two thousand five hundred", "2,500"],
+  ["twenty-one plus nine", "30"],
+  ["lunch for five plus $10", "$15.00"],
+  ["20/5 as multiplier", "4x"],
+  ["50 to 75 is what x", "1.5x"],
+  ["50 to 75 as multiplier", "1.5x"],
+  ["100 is what multiple of 50", "2x"],
+  ["20/5 as x", "4x"],
+
   // word skipping
   ["lunch was $18.50 + 20% tip", "$22.20"],
   ["answer 42 costs $10", "$10.00"],
