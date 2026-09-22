@@ -36,6 +36,18 @@ export const addMonths = (ed: number, months: number): number => {
 
 export const weekday = (ed: number): number => new Date(ed * DAY_MS).getUTCDay(); // 0 = Sunday
 
+// ISO-8601 week number (1-53): Jan 4 is always in week 1
+export function isoWeek(ed: number): number {
+  const { y } = fromEpochDay(ed);
+  const jan4 = toEpochDay({ y, m: 1, d: 4 });
+  const week1mon = jan4 - ((weekday(jan4) + 6) % 7); // Monday of week 1
+  const w = Math.floor((ed - week1mon) / 7) + 1;
+  if (w < 1) return isoWeek(toEpochDay({ y: y - 1, m: 12, d: 31 }));
+  const nextJan4 = toEpochDay({ y: y + 1, m: 1, d: 4 });
+  if (w > 52 && ed >= nextJan4 - ((weekday(nextJan4) + 6) % 7)) return 1;
+  return w;
+}
+
 const WDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 export const weekdayName = (ed: number): string => WDAY_NAMES[weekday(ed)];
 

@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { evaluateSheet } from "../sheet";
 import { formatValue } from "../format";
-import { todayEpoch, nearestWeekday } from "../dates";
+import { todayEpoch, nearestWeekday, toEpochDay, isoWeek } from "../dates";
 import { setWorkdayConfig } from "../workdays";
 import { setTaxConfig } from "../tax";
-import { setCupSystem } from "../units";
+import { setCupSystem, unitById } from "../units";
 import { Decimal } from "../value";
 
 const line = (input: string): string => evaluateSheet(input).lines[0].formatted;
@@ -302,6 +302,16 @@ const GOLDENS: [string, string][] = [
   ["1 cm in px @ 326 ppi", "128.35 px"],
   ["1 cup in ml", "236.59 mL"],
 
+  // 1.9 timestamps, timespans, ISO
+  ["April 1, 2019 to timestamp", "1,554,076,800"],
+  ["1559740303 to date", "5 June 2019"],
+  ["5.5 minutes as timespan", "5 min 30 s"],
+  ["3h 5m 10s in seconds", "11,110 s"],
+  ["1.4 weeks in hours and minutes", "235 hours 12 min"],
+  ["April 1, 2019 as iso8601", "2019-04-01"],
+  ["2020-01-19T14:30", "19 January 2020 at 2:30 pm"],
+  ["hours in June", "720 hours"],
+
   // word skipping
   ["lunch was $18.50 + 20% tip", "$22.20"],
   ["answer 42 costs $10", "$10.00"],
@@ -393,6 +403,21 @@ describe("cup system", () => {
     } finally {
       setCupSystem("us");
     }
+  });
+});
+
+describe("timestamps and calendar queries", () => {
+  test("current timestamp is now", () => {
+    const n = parseInt(line("current timestamp").replace(/,/g, ""), 10);
+    expect(n).toBeGreaterThan(1700000000);
+    expect(Date.now() / 1000 - n).toBeLessThan(60);
+  });
+  test("days left in 2026 tracks today", () => {
+    const left = toEpochDay({ y: 2027, m: 1, d: 1 }) - todayEpoch();
+    expect(line("days left in 2026")).toBe(formatValue({ kind: "quantity", d: new Decimal(left), unit: unitById("day") }));
+  });
+  test("week of year is the ISO week", () => {
+    expect(line("week of year")).toBe(String(isoWeek(todayEpoch())));
   });
 });
 

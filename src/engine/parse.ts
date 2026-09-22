@@ -1,7 +1,7 @@
 import { Decimal, Unit, Value, CalcError } from "./value";
-import { tokenize } from "./tokenize";
+import { tokenize, RawTok } from "./tokenize";
 import { lookupUnitWord, lookupTwoWord, lookupSubstance, currencyBySymbol } from "./units";
-import { MONTHS, WDAYS, todayEpoch, toEpochDay, fromEpochDay, nearestWeekday, daysInMonth, holiday } from "./dates";
+import { MONTHS, WDAYS, todayEpoch, toEpochDay, fromEpochDay, nearestWeekday, daysInMonth, holiday, isoWeek } from "./dates";
 import { lookupZoneWord, lookupZonePair, localZone, wallToEpochMin, epochMinToWall, offsetMin } from "./times";
 import { unitById } from "./units";
 import { taxName } from "./tax";
@@ -91,6 +91,8 @@ const KWS = new Set([
   "worth", "inflation", "sunrise", "sunset",
   // logic phrases
   "then", "else", "if", "unless", "equals", "prime", "random",
+  // timestamp phrases
+  "current", "timestamp", "date",
 ]);
 export const AGGS = new Set(["total", "sum", "average", "avg", "count", "median", "min", "max"]);
 const LISTFNS = new Set(["gcd", "lcm", "stddev"]);
@@ -101,7 +103,7 @@ const FNS = new Set([
   "half", "root", "midpoint", "larger", "smaller", "clamp", "npr", "ncr", "perm", "comb", "assert",
   "gcd", "lcm", "stddev", "stdev",
 ]);
-const FMTS = new Set(["hex", "hexadecimal", "binary", "bin", "octal", "oct", "decimal", "dec", "number", "num", "fraction", "percent", "percentage", "sci", "scientific", "pitch", "frames", "multiplier", "multiple", "multiples", "x"]);
+const FMTS = new Set(["hex", "hexadecimal", "binary", "bin", "octal", "oct", "decimal", "dec", "number", "num", "fraction", "percent", "percentage", "sci", "scientific", "pitch", "frames", "multiplier", "multiple", "multiples", "x", "timespan", "iso8601", "iso"]);
 // Plain number words: zero to ninety plus hundred/thousand/million/billion/trillion.
 // Hyphenated tens like twenty-one arrive as word, op(-), word so the scanner skips the hyphen.
 const SMALL_WORDS: Record<string, number> = {
@@ -308,6 +310,21 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
     const w = t.w;
     const lower = w.toLowerCase();
     const prev = raw[i - 1];
+
+    // ISO datetime glue: the T14 in 2020-01-19T14:30 becomes a bare hour for clock folding
+    const tHour = /^T(\d{1,2})$/.exec(w);
+    if (tHour && prev?.t === "num") {
+      const nx = raw[i + 1];
+      if (nx?.t === "op" && (nx as Extract<RawTok, { t: "op" }>).op === ":") {
+        const h = parseInt(tHour[1], 10);
+        if (h <= 23) {
+          S({ s: "num", d: new Decimal(h), from: t.from, to: t.to });
+          M(t.from, t.to, "number");
+          i++;
+          continue;
+        }
+      }
+    }
 
     // glued suffix: 3k, $5m, 10m, 16th, 4pm
     if (t.att && prev && prev.t === "num") {
@@ -1367,9 +1384,11 @@ function parseTarget(toks: Sig[]): Target | null {
   const a = toks[0];
   if (toks.length === 1) {
     if (a.s === "fmt") {
-      const map: Record<string, string> = { hexadecimal: "hex", binary: "bin", octal: "oct", decimal: "dec", number: "num", percentage: "percent", scientific: "sci", multiple: "multiplier", multiples: "multiplier", x: "multiplier" };
+      const map: Record<string, string> = { hexadecimal: "hex", binary: "bin", octal: "oct", decimal: "dec", number: "num", percentage: "percent", scientific: "sci", multiple: "multiplier", multiples: "multiplier", x: "multiplier", iso: "iso8601" };
       return { k: "fmt", fmt: map[a.fmt] ?? a.fmt };
     }
+    // "1559740303 to date", "April 1, 2019 to timestamp"
+    if (a.s === "kw" && (a.kw === "timestamp" || a.kw === "date")) return { k: "fmt", fmt: a.kw };
     if (a.s === "op" && a.op === "%") return { k: "fmt", fmt: "percent" };
     if (a.s === "unit") return { k: "unit", unit: a.unit };
     if (a.s === "zone") return { k: "zone", zone: a.zone };
@@ -1610,6 +1629,10 @@ function parseNumberish(sig: Sig[], pos: number, currencyUnit: Unit | null): PE 
       if (u2?.s === "unit") next = u2.unit;
       // glued suffix units fold too (5' 6", 5h 30min) - but never multiplier lookalikes like 3k
       else if (u2?.s === "aff" && !/^(k|m|b|t|bn|tn|mn)$/i.test(u2.w)) next = lookupUnitWord(u2.w);
+      // inside a duration, a bare m means minutes ("3h 5m 10s"), never meters
+      if (!next && isDur && u2 && ((u2.s === "aff" && u2.w === "m") || (u2.s === "unit" && u2.unit.id === "m"))) {
+        next = unitById("min");
+      }
       if (next && next.category === unit.category) {
         base = base.plus(n2.d.mul(next.factor));
         if (isDur) addCal(n2.d, next);
@@ -1882,6 +1905,28 @@ function dateScans(sig: Sig[]): Node | null {
     }
     return -1;
   };
+
+  // unix time now: "current timestamp", bare "timestamp"
+  if (sig.length === 2 && isKw(sig[0], "current") && isKw(sig[1], "timestamp") && at0(0) && at0(1)) {
+    return { n: "value", v: { kind: "number", d: new Decimal(Math.floor(Date.now() / 1000)), disp: { dp: 0 } } };
+  }
+  if (sig.length === 1 && isKw(sig[0], "timestamp")) {
+    return { n: "value", v: { kind: "number", d: new Decimal(Math.floor(Date.now() / 1000)), disp: { dp: 0 } } };
+  }
+
+  // ISO week number: "week of year", "week of year on March 5", "week of March 5"
+  if (isDurUnit(sig[0]) && sig[0].unit.id === "week" && isKw(sig[1], "of")) {
+    const rest = sig.slice(2);
+    if (rest.length === 1 && rest[0].s === "unit" && rest[0].unit.id === "year" && at0(2)) {
+      return { n: "value", v: { kind: "number", d: new Decimal(isoWeek(todayEpoch())) } };
+    }
+    if (rest.length === 1 && rest[0].s === "dateval" && at0(2)) {
+      return { n: "value", v: { kind: "number", d: new Decimal(isoWeek(rest[0].ed)) } };
+    }
+    if (rest.length === 2 && isKw(rest[0], "on") && rest[1].s === "dateval" && at0(2) && at0(3)) {
+      return { n: "value", v: { kind: "number", d: new Decimal(isoWeek(rest[1].ed)) } };
+    }
+  }
 
   // weekday on <date>
   if (sig[0]?.s === "wdfn") {

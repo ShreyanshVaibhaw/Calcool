@@ -687,7 +687,9 @@ export function convertValue(v: Value, t: Target): Value {
       // asking for a unit by name means decimal display, unless a remainder unit was named too
       const uDisp: Disp = t.sub ? { sub: t.sub.id } : { plain: true };
       if (v.kind === "quantity") {
-        if (v.unit.category === "duration" && t.unit.category === "duration") return Q(durationConvert(v, t.unit), t.unit);
+        if (v.unit.category === "duration" && t.unit.category === "duration") {
+          return { ...Q(durationConvert(v, t.unit), t.unit), disp: uDisp };
+        }
         if (v.unit.category === t.unit.category) return { ...Q(convertQty(v.d, v.unit, t.unit), t.unit), disp: uDisp };
         // a substance density bridges mass and volume: 300g butter in cups
         if (v.dens) {
@@ -788,6 +790,28 @@ export function convertValue(v: Value, t: Target): Value {
           break;
         case "multiplier":
           if (v.kind === "number") return { ...v, disp: { ...v.disp, mode: "multiplier" } };
+          bad();
+          break;
+        case "timespan":
+          // "5.5 minutes as timespan" renders decomposed: 5 min 30 s
+          if (v.kind === "quantity" && v.unit.category === "duration") return { ...v, disp: { ...v.disp, mode: "timespan" } };
+          bad();
+          break;
+        case "timestamp":
+          // a date lands on UTC midnight; times keep their minute
+          if (v.kind === "date") return { kind: "number", d: v.d.mul(86400), disp: { dp: 0 } };
+          if (v.kind === "time") return { kind: "number", d: v.d.mul(60), disp: { dp: 0 } };
+          bad();
+          break;
+        case "date":
+          if (v.kind === "number") {
+            if (!v.d.isInteger()) bad();
+            return { kind: "date", d: v.d.div(86400).floor() };
+          }
+          bad();
+          break;
+        case "iso8601":
+          if (v.kind === "date" || v.kind === "time") return { ...v, disp: { ...v.disp, mode: "iso" } };
           bad();
           break;
         case "pitch":

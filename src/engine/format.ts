@@ -69,6 +69,27 @@ function sci(d: Decimal): string {
   return d.toExponential().replace("e+", "e");
 }
 
+const p2 = (n: number): string => String(n).padStart(2, "0");
+
+// decomposed duration: 330 s -> "5 min 30 s", 90061 s -> "1 day 1 hour 1 min 1 s"
+function timespan(d: Decimal, unit: Unit): string {
+  const sign = d.isNeg() ? "-" : "";
+  let rem = d.abs().mul(unit.factor); // seconds (durations carry no offset)
+  const parts: string[] = [];
+  const take = (per: number, one: string, many: string): void => {
+    const n = rem.div(per).floor();
+    rem = rem.minus(n.mul(per));
+    if (!n.isZero()) parts.push(`${groupFixed(n.toFixed())} ${n.eq(1) ? one : many}`);
+  };
+  take(86400, "day", "days");
+  take(3600, "hour", "hours");
+  take(60, "min", "min");
+  const s = rem.toDecimalPlaces(2);
+  if (!s.isZero()) parts.push(`${trimZeros(s.toFixed())} s`);
+  if (!parts.length) return "0 s";
+  return sign + parts.join(" ");
+}
+
 // singular form for word-like unit symbols: "days" -> "day"
 function unitLabel(u: Unit, d: Decimal): string {
   let s = u.symbol;
@@ -119,6 +140,7 @@ export function formatValue(v: Value): string {
     case "bool":
       return v.b ? "true" : "false";
     case "quantity": {
+      if (disp.mode === "timespan" && v.unit.category === "duration") return timespan(v.d, v.unit);
       if (disp.mode === "hm") {
         const total = Math.round(v.d.toNumber());
         const h = Math.floor(total / 60);
@@ -164,13 +186,15 @@ export function formatValue(v: Value): string {
     }
     case "date": {
       const ed = v.d.toNumber();
-      if (disp.mode === "weekday") return weekdayName(ed);
       const { y, m, d } = fromEpochDay(ed);
+      if (disp.mode === "iso") return `${y}-${p2(m)}-${p2(d)}`;
+      if (disp.mode === "weekday") return weekdayName(ed);
       const cur = fromEpochDay(todayEpoch()).y;
       return `${d} ${MONTH_NAMES[m - 1]}` + (y !== cur ? ` ${y}` : "");
     }
     case "time": {
       const w = epochMinToWall(v.zone ?? localZone(), v.d.toNumber());
+      if (disp.mode === "iso") return `${w.y}-${p2(w.m)}-${p2(w.d)}T${p2(Math.floor(w.mins / 60))}:${p2(w.mins % 60)}`;
       const h = Math.floor(w.mins / 60);
       const m = w.mins % 60;
       const clock = `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
