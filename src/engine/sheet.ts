@@ -302,6 +302,56 @@ export function evaluateSheet(text: string): SheetOut {
       continue;
     }
 
+    // compound assignment: "x += 5" adds to the last value of x above (silent when unset)
+    if (eq <= 0) {
+      let ceq = -1;
+      let cop: "+" | "-" | null = null;
+      let clead = 0;
+      let cdepth = 0;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (t.t === "lp") cdepth++;
+        else if (t.t === "rp") cdepth--;
+        else if (t.t === "op" && (t.op === "+" || t.op === "-") && cdepth === 0) {
+          const nx = toks[i + 1];
+          if (nx?.t === "op" && nx.op === "=") {
+            const first = toks[0];
+            const lead = first?.t === "num" && first.d.eq(1) ? 1 : 0;
+            if (i > lead && toks.slice(lead, i).every((w) => w.t === "word")) {
+              ceq = i;
+              cop = t.op as "+" | "-";
+              clead = lead;
+            }
+            break;
+          }
+        }
+      }
+      if (ceq > 0 && cop) {
+        const nameFrom = toks[clead].from;
+        const nameTo = toks[ceq - 1].to;
+        const name = normalizeVarName(body.slice(nameFrom, nameTo));
+        sem.push({ from: off + nameFrom, to: off + nameTo, type: "variable" });
+        const rhsBase = toks[ceq + 1].to;
+        const { sig, sem: rhsSem } = classify(body.slice(rhsBase), env, off + rhsBase);
+        sem.push(...rhsSem);
+        const parsed = parseSig(sig);
+        const rhsTags = sig.filter((t): t is Extract<Sig, { s: "tag" }> => t.s === "tag").map((t) => t.tag);
+        let value: Value | null = null;
+        const old = env.vars.get(name);
+        if (parsed?.kind === "expr" && old) {
+          try {
+            const delta = evalNode(parsed.node, env);
+            value = cop === "+" ? addValues(old, delta) : binop("-", old, delta);
+          } catch (e) {
+            if (!(e instanceof CalcError)) throw e;
+          }
+        }
+        if (value) env.vars.set(name, value);
+        finish("assign", value, rhsTags);
+        continue;
+      }
+    }
+
     // regular line
     const { sig, sem: exprSem } = classify(body, env, off);
     sem.push(...exprSem);
@@ -353,4 +403,31 @@ export function evaluateSheet(text: string): SheetOut {
     }
   }
   return { lines: out, total, totalFormatted };
+}
+
+const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Pure rename of a variable across sheet text: whole-word matches outside comments
+// and quoted strings become newName. The UI wires this to F2/Ctrl+R with one undo.
+export function renameVariable(text: string, oldName: string, newName: string): string {
+  const from = normalizeVarName(oldName);
+  const to = newName.trim();
+  if (!from || !to || from === normalizeVarName(to)) return text;
+  const re = new RegExp(`(?<![A-Za-z0-9_])${from.split(" ").map(escapeRegExp).join("\\s+")}(?![A-Za-z0-9_])`, "gi");
+  return text
+    .split("\n")
+    .map((raw) => {
+      const { spans } = maskComments(raw);
+      let out = "";
+      let pos = 0;
+      const sorted = [...spans].sort((a, b) => a.from - b.from);
+      for (const s of sorted) {
+        if (pos < s.from) out += raw.slice(pos, s.from).replace(re, to);
+        out += raw.slice(s.from, s.to);
+        pos = s.to;
+      }
+      if (pos < raw.length) out += raw.slice(pos).replace(re, to);
+      return out;
+    })
+    .join("\n");
 }

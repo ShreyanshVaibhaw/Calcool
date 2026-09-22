@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { evaluateSheet } from "../sheet";
+import { evaluateSheet, renameVariable } from "../sheet";
 import { formatValue } from "../format";
 import { todayEpoch, nearestWeekday, toEpochDay, isoWeek } from "../dates";
 import { setWorkdayConfig } from "../workdays";
@@ -389,6 +389,39 @@ describe("tags and dividers", () => {
   test("--- resets total scope", () => {
     const r = evaluateSheet(["10", "20", "---", "30", "total"].join("\n"));
     expect(r.lines.map((l) => l.formatted)).toEqual(["10", "20", "", "30", "30"]);
+  });
+});
+
+describe("compound assignment and redefinition", () => {
+  test("x += 5 adds to the last value above", () => {
+    const r = evaluateSheet(["x = 5", "x += 3", "x"].join("\n"));
+    expect(r.lines.map((l) => l.formatted)).toEqual(["5", "8", "8"]);
+  });
+  test("x -= 5 subtracts", () => {
+    const r = evaluateSheet(["x = 10", "x -= 4", "x"].join("\n"));
+    expect(r.lines.map((l) => l.formatted)).toEqual(["10", "6", "6"]);
+  });
+  test("compound assignment on an unset variable stays silent", () => {
+    expect(line("nope += 3")).toBe("");
+  });
+  test("later redefinition never changes earlier lines", () => {
+    const r = evaluateSheet(["x = 5", "y = x", "x = 10", "y", "x"].join("\n"));
+    expect(r.lines.map((l) => l.formatted)).toEqual(["5", "5", "10", "5", "10"]);
+  });
+});
+
+describe("renameVariable", () => {
+  test("renames definitions and uses", () => {
+    const before = ["rent = $1,450", "rent × 12", "lunch was rent + $5"].join("\n");
+    expect(renameVariable(before, "rent", "lease")).toBe(["lease = $1,450", "lease × 12", "lunch was lease + $5"].join("\n"));
+  });
+  test("skips comments, quoted text, and partial words", () => {
+    const before = ["// rent is due", 'say "rent" loudly', "rental = 5", "rent = 1"].join("\n");
+    expect(renameVariable(before, "rent", "lease")).toBe(["// rent is due", 'say "rent" loudly', "rental = 5", "lease = 1"].join("\n"));
+  });
+  test("renames multi-word variables", () => {
+    const before = ["monthly rent = 5", "monthly  rent + 1"].join("\n");
+    expect(renameVariable(before, "monthly rent", "rent")).toBe(["rent = 5", "rent + 1"].join("\n"));
   });
 });
 
