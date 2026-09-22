@@ -89,12 +89,14 @@ const KWS = new Set([
   // logic phrases
   "then", "else", "if", "unless", "equals", "prime", "random",
 ]);
-export const AGGS = new Set(["total", "sum", "average", "avg", "count", "median"]);
+export const AGGS = new Set(["total", "sum", "average", "avg", "count", "median", "min", "max"]);
+const LISTFNS = new Set(["gcd", "lcm", "stddev"]);
 const FNS = new Set([
   "sqrt", "cbrt", "abs", "round", "ceil", "floor", "fact", "factorial", "ln", "log", "log2", "log10", "exp",
   "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "sind", "cosd", "tand", "min", "max",
   "hex", "bin", "oct", "int",
   "half", "root", "midpoint", "larger", "smaller", "clamp", "npr", "ncr", "perm", "comb", "assert",
+  "gcd", "lcm", "stddev", "stdev",
 ]);
 const FMTS = new Set(["hex", "hexadecimal", "binary", "bin", "octal", "oct", "decimal", "dec", "number", "num", "fraction", "percent", "percentage", "sci", "scientific", "pitch", "frames", "multiplier", "multiple", "multiples", "x"]);
 // Plain number words: zero to ninety plus hundred/thousand/million/billion/trillion.
@@ -401,6 +403,12 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
         i += 2;
         continue;
       }
+      if (pair === "standard deviation") {
+        S({ s: "fn", name: "stddev", from: t.from, to: next.to });
+        M(t.from, next.to, "function");
+        i += 2;
+        continue;
+      }
       if (pair === "per cent") {
         S({ s: "op", op: "%", spacedL: true, from: t.from, to: next.to });
         M(t.from, next.to, "operator");
@@ -466,6 +474,13 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
       i++;
       continue;
     }
+    // min/max double as functions with parens: min(5, 3). Otherwise they stay aggregates.
+    if ((lower === "min" || lower === "max") && raw[i + 1]?.t === "lp") {
+      S({ s: "fn", name: lower, from: t.from, to: t.to });
+      M(t.from, t.to, "function");
+      i++;
+      continue;
+    }
     if (AGGS.has(lower) || KWS.has(lower)) {
       S({ s: "kw", kw: lower === "avg" ? "average" : lower, from: t.from, to: t.to });
       M(t.from, t.to, "keyword");
@@ -486,7 +501,8 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
       continue;
     }
     if (FNS.has(lower)) {
-      S({ s: "fn", name: lower === "factorial" ? "fact" : lower, from: t.from, to: t.to });
+      const name = lower === "factorial" ? "fact" : lower === "stdev" ? "stddev" : lower;
+      S({ s: "fn", name, from: t.from, to: t.to });
       M(t.from, t.to, "function");
       i++;
       continue;
@@ -680,10 +696,13 @@ export function parseSig(sig: Sig[]): ParseResult {
     };
   }
 
-  // aggregate over an inline list: "total of 3, 4, 7 and 9"
+  // aggregate over an inline list: "total of 3, 4, 7 and 9", "gcd of 12, 18 and 24"
   // ("total repayment on ..." is a finance phrase, not an aggregate)
   const aggBlocked = sig[1]?.s === "kw" && /^(re)?payments?$/.test(sig[1].kw);
-  if (first.s === "kw" && AGGS.has(first.kw) && sig.length > 1 && !aggBlocked) {
+  const aggName = first.s === "kw" && AGGS.has(first.kw) && sig.length > 1 && !aggBlocked ? first.kw : null;
+  // fn list ("gcd of ...") but never a paren call ("gcd(12, 18)" belongs to parsePrimary)
+  const listName = first.s === "fn" && LISTFNS.has(first.name) && sig.length > 1 && sig[1]?.s !== "lp" ? first.name : null;
+  if (aggName || listName) {
     let i = 1;
     if (isKw(sig[i], "of")) i++;
     const dep = depths(sig);
@@ -700,7 +719,7 @@ export function parseSig(sig: Sig[]): ParseResult {
     if (parts.length >= 1 && parts.every((p) => p.length > 0)) {
       const args = parts.map((p) => parseSlice(p));
       if (args.every((a): a is Node => a !== null)) {
-        return { kind: "expr", node: { n: "fn", name: first.kw, args } };
+        return { kind: "expr", node: { n: "fn", name: (aggName ?? listName)!, args } };
       }
     }
   }

@@ -1,6 +1,6 @@
-import { classify, parseSig, normalizeVarName, SemTok, Env } from "./parse";
+import { classify, parseSig, normalizeVarName, SemTok, Env, Sig } from "./parse";
 import { tokenize } from "./tokenize";
-import { evalNode, addValues } from "./evaluate";
+import { evalNode, addValues, baseKey, binop } from "./evaluate";
 import { formatValue } from "./format";
 import { Value, CalcError, Decimal } from "./value";
 
@@ -101,11 +101,45 @@ function windowAggregate(name: string, out: LineOut[]): Value | null {
         const s = addValues(sorted[mid - 1], sorted[mid]);
         return { ...s, d: s.d.div(2) };
       }
+      case "min":
+      case "max": {
+        let best = usable[0];
+        for (const v of usable.slice(1)) {
+          const better = name === "max" ? baseKey(v).gt(baseKey(best)) : baseKey(v).lt(baseKey(best));
+          if (better) best = v;
+        }
+        return best;
+      }
     }
   } catch {
     return null;
   }
   return null;
+}
+
+// A line holding nothing but a percent ("10%", "tip 10%") applies to the running
+// subtotal above it: the tax/tip pattern. No subtotal above means a plain percent.
+function isBarePercent(sig: Sig[]): boolean {
+  const pct = (t: Sig | undefined): boolean => !!t && t.s === "op" && (t as Extract<Sig, { s: "op" }>).op === "%";
+  if (sig.length === 2 && sig[0].s === "num" && pct(sig[1])) return true;
+  if (sig.length === 3 && sig[0].s === "op" && sig[1].s === "num" && pct(sig[2])) return true;
+  return false;
+}
+
+function blockSubtotal(out: LineOut[]): Value | null {
+  const collected: Value[] = [];
+  for (let j = out.length - 1; j >= 0; j--) {
+    const l = out[j];
+    if (l.kind === "empty" || l.kind === "heading" || l.kind === "aggregate") break;
+    if (l.value) collected.push(l.value);
+  }
+  const usable = collected.filter((v) => v.kind !== "percent" && v.kind !== "date" && v.kind !== "time" && v.kind !== "bool");
+  if (!usable.length) return null;
+  try {
+    return fold(usable);
+  } catch {
+    return null;
+  }
 }
 
 export function evaluateSheet(text: string): SheetOut {
@@ -225,6 +259,17 @@ export function evaluateSheet(text: string): SheetOut {
       value = evalNode(parsed.node, env);
     } catch (e) {
       if (!(e instanceof CalcError)) throw e;
+    }
+    // bare percent lines apply to the block subtotal above ("tip 10%" after dinner lines)
+    if (value?.kind === "percent" && isBarePercent(sig)) {
+      const sub = blockSubtotal(out);
+      if (sub) {
+        try {
+          value = binop("of", value, sub);
+        } catch {
+          /* keep the plain percent */
+        }
+      }
     }
     finish("normal", value);
   }

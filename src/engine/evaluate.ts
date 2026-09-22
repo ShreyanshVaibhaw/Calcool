@@ -420,7 +420,7 @@ const coerceDate = (v: Value): number => {
 };
 
 // comparable scalar for min/max/median
-function baseKey(v: Value): Decimal {
+export function baseKey(v: Value): Decimal {
   if (v.kind === "quantity") return toBase(v.d, v.unit);
   return v.d;
 }
@@ -626,6 +626,35 @@ function applyFn(name: string, args: Value[]): Value {
       const mid = Math.floor(sorted.length / 2);
       if (sorted.length % 2 === 1) return sorted[mid];
       return binop("/", binop("+", sorted[mid - 1], sorted[mid]), N(new Decimal(2)));
+    }
+    case "gcd":
+    case "lcm": {
+      if (!args.length) bad();
+      const ints = args.map((v) => {
+        if (v.kind !== "number" || !v.d.isInteger()) bad();
+        return (v as Extract<Value, { kind: "number" }>).d.abs().toNumber();
+      });
+      if (ints.some((n) => !Number.isSafeInteger(n))) bad();
+      const gcd2 = (a: number, b: number): number => (b === 0 ? a : gcd2(b, a % b));
+      let g = 0;
+      for (const n of ints) g = gcd2(g, n);
+      if (name === "gcd") return N(new Decimal(g));
+      if (ints.every((n) => n === 0)) return N(new Decimal(0));
+      let m = 1;
+      for (const n of ints) m = (m * n) / gcd2(m, n);
+      return N(new Decimal(m));
+    }
+    case "stddev": {
+      // population standard deviation
+      if (!args.length) bad();
+      const xs = args.map((v) => {
+        if (v.kind !== "number") bad();
+        return (v as Extract<Value, { kind: "number" }>).d;
+      });
+      const n = xs.length;
+      const mean = xs.reduce((a, x) => a.plus(x), new Decimal(0)).div(n);
+      const variance = xs.reduce((a, x) => a.plus(x.minus(mean).pow(2)), new Decimal(0)).div(n);
+      return N(Decimal.sqrt(variance));
     }
   }
   return bad();

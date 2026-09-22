@@ -259,6 +259,14 @@ const GOLDENS: [string, string][] = [
   ["e to 4 dp", "2.7183"],
   ["my lunch cost 5 and 3", "3"],
 
+  // 1.5 list stats
+  ["min 5, 3, 7", "3"],
+  ["max 5, 3, 7", "7"],
+  ["my gcd of 12, 18 and 24 please", "6"],
+  ["gcd(12, 18)", "6"],
+  ["lcm of 4 and 6", "12"],
+  ["standard deviation of 2, 4, 4, 4, 5, 5, 7, 9", "2"],
+
   // word skipping
   ["lunch was $18.50 + 20% tip", "$22.20"],
   ["answer 42 costs $10", "$10.00"],
@@ -294,6 +302,21 @@ describe("conditionals", () => {
       expect(n).toBeLessThanOrEqual(10);
       expect(Number.isInteger(n)).toBe(true);
     }
+  });
+});
+
+describe("block aggregates and bare percent", () => {
+  test("min/max/count/total share block scope", () => {
+    const r = evaluateSheet(["10", "20", "30", "min", "", "5", "20", "max", "", "7", "count"].join("\n"));
+    expect(r.lines.map((l) => l.formatted)).toEqual(["10", "20", "30", "10", "", "5", "20", "20", "", "7", "1"]);
+  });
+  test("bare percent applies to the subtotal above", () => {
+    const r = evaluateSheet(["100", "20", "10%"].join("\n"));
+    expect(r.lines.map((l) => l.formatted)).toEqual(["100", "20", "12"]);
+  });
+  test("tip pattern with money and total", () => {
+    const r = evaluateSheet(["dinner was $100", "drinks $20", "tip 10%", "total"].join("\n"));
+    expect(r.lines.map((l) => l.formatted)).toEqual(["$100.00", "$20.00", "$12.00", "$132.00"]);
   });
 });
 
