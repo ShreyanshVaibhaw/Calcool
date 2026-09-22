@@ -89,6 +89,14 @@ export function tokenize(line: string): RawTok[] {
 
     if (isWordStart(c)) {
       const from = i;
+      // dollar prefixes glue onto the $: US$100, C$100, A$100, HK$100 (case-insensitive)
+      const rest = line.slice(i).toUpperCase();
+      const pre = rest.startsWith("US$") ? "US$" : rest.startsWith("HK$") ? "HK$" : rest.startsWith("C$") ? "C$" : rest.startsWith("A$") ? "A$" : null;
+      if (pre) {
+        push({ t: "cur", sym: pre, from, to: i + pre.length, att: lastEnd === from });
+        i += pre.length;
+        continue;
+      }
       let w = "";
       while (i < line.length && isWordChar(line[i])) {
         w += line[i];

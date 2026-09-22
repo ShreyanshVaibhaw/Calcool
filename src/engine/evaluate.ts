@@ -712,6 +712,13 @@ export function convertValue(v: Value, t: Target): Value {
       bad();
       break;
     }
+    case "xrate": {
+      // custom rate: source amount times the rate, in the target currency
+      if (v.kind === "quantity" && v.unit.category === "currency") return Q(v.d.mul(t.rate), t.unit);
+      if (v.kind === "number") return Q(v.d.mul(t.rate), t.unit);
+      bad();
+      break;
+    }
     case "fmt": {
       switch (t.fmt) {
         case "num":

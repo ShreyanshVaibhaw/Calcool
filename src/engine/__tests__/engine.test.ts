@@ -272,6 +272,16 @@ const GOLDENS: [string, string][] = [
   ["lunch $20 # note", "$20.00"],
   ["total of #work", ""],
 
+  // 1.7 currency extras (offline fallback table: CAD 1.36, AUD 1.52, HKD 7.8 per USD)
+  ["50 EUR in USD at 1.05", "$52.50"],
+  ["50 EUR in USD at 1.05 USD/EUR", "$52.50"],
+  ["C$100 in USD at 0.75", "$75.00"],
+  ["C$100 in USD", "$73.53"],
+  ["lunch cost me C$100 in USD please", "$73.53"],
+  ["A$10 in USD", "$6.58"],
+  ["US$50", "$50.00"],
+  ["HK$100 in USD", "$12.82"],
+
   // word skipping
   ["lunch was $18.50 + 20% tip", "$22.20"],
   ["answer 42 costs $10", "$10.00"],

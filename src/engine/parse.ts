@@ -24,6 +24,7 @@ export type Target =
   | { k: "fmt"; fmt: string }
   | { k: "dp"; n: number }
   | { k: "nearest"; m: Decimal; frac?: boolean } // frac: step was a fraction, display as fraction
+  | { k: "xrate"; unit: Unit; rate: Decimal } // custom currency rate: "50 EUR in USD at 1.05"
   | { k: "zone"; zone: string };
 
 export type Node =
@@ -1017,6 +1018,38 @@ function parseSlice(sigIn: Sig[]): Node | null {
   // sun phrases keep their trailing "on <date>", so they scan before the annotation strip
   const sunNode = sunScans(sig);
   if (sunNode) return sunNode;
+
+  // custom currency rate: "50 EUR in USD at 1.05" (also "at 1.05 USD/EUR").
+  // The rate wins for this line only; the cached table is untouched.
+  {
+    const dp = depths(sig);
+    for (let k = sig.length - 1; k > 0; k--) {
+      if (dp[k] !== 0 || !isKw(sig[k], "at")) continue;
+      const rateToks = sig.slice(k + 1);
+      if (rateToks.length < 1 || rateToks[0].s !== "num") continue;
+      if (rateToks.length !== 1) {
+        const shape =
+          rateToks.length === 4 &&
+          rateToks[1].s === "unit" &&
+          (isOp(rateToks[2], "/") || isKw(rateToks[2], "per")) &&
+          rateToks[3].s === "unit";
+        if (!shape) continue;
+      }
+      const rate = rateToks[0].d;
+      if (rate.lte(0)) continue;
+      const lhs = sig.slice(0, k);
+      const ldep = depths(lhs);
+      for (let m = lhs.length - 1; m > 0; m--) {
+        if (ldep[m] !== 0) continue;
+        const kw = lhs[m];
+        if (!(kw.s === "kw" && (kw.kw === "in" || kw.kw === "to" || kw.kw === "as" || kw.kw === "into"))) continue;
+        const tgt = lhs.slice(m + 1);
+        if (tgt.length !== 1 || tgt[0].s !== "unit" || tgt[0].unit.category !== "currency") continue;
+        const money = parseSlice(lhs.slice(0, m));
+        if (money) return { n: "convert", c: money, t: { k: "xrate", unit: tgt[0].unit, rate } };
+      }
+    }
+  }
 
   // -- time and date phrases
   sig = stripDateAnnotations(sig);

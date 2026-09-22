@@ -248,6 +248,8 @@ for (const d of DEFS) for (const n of d.names ?? []) if (!n.includes(" ")) lower
 
 const CUR_SYMBOLS: Record<string, string> = {
   $: "USD", "€": "EUR", "£": "GBP", "¥": "JPY", "₹": "INR", "₽": "RUB", "₩": "KRW", "฿": "THB", "₺": "TRY",
+  // dollar prefixes: $ is USD by default; US$ is explicit USD; C$/A$/HK$ map north of the border and abroad
+  "US$": "USD", "C$": "CAD", "A$": "AUD", "HK$": "HKD",
 };
 
 export function unitById(id: string): Unit {
