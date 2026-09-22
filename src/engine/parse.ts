@@ -23,7 +23,7 @@ export type Target =
   | { k: "rate"; num: Unit; den: Unit }
   | { k: "fmt"; fmt: string }
   | { k: "dp"; n: number }
-  | { k: "nearest"; m: Decimal }
+  | { k: "nearest"; m: Decimal; frac?: boolean } // frac: step was a fraction, display as fraction
   | { k: "zone"; zone: string };
 
 export type Node =
@@ -702,9 +702,31 @@ export function parseSig(sig: Sig[]): ParseResult {
   return node ? { kind: "expr", node } : null;
 }
 
+// Mixed numbers: "1 1/2" means 1.5, "1 1/2 pounds" means 1.5 pounds.
+// Folds [whole, n, /, d] into one num when all four sit at the same depth.
+function foldMixedNumbers(sig: Sig[]): void {
+  const dep = depths(sig);
+  for (let i = 0; i + 3 < sig.length; i++) {
+    const w = sig[i];
+    const n = sig[i + 1];
+    const sl = sig[i + 2];
+    const d = sig[i + 3];
+    if (w?.s !== "num" || n?.s !== "num" || d?.s !== "num") continue;
+    if (!(sl?.s === "op" && sl.op === "/")) continue;
+    if (!w.d.isInteger() || w.d.isNeg()) continue;
+    if (!n.d.isInteger() || !d.d.isInteger() || d.d.isZero()) continue;
+    if (!(dep[i] === dep[i + 1] && dep[i] === dep[i + 2] && dep[i] === dep[i + 3])) continue;
+    const v = w.d.plus(n.d.div(d.d));
+    sig.splice(i, 4, { s: "num", d: v, from: w.from, to: d.to });
+    dep.splice(i, 4, dep[i]);
+    i--;
+  }
+}
+
 function parseSlice(sigIn: Sig[]): Node | null {
   let sig = sigIn;
   if (sig.length === 0) return null;
+  foldMixedNumbers(sig);
   const dep = depths(sig);
   const at0 = (k: number) => dep[k] === 0;
 
@@ -1055,6 +1077,19 @@ function parseTarget(toks: Sig[]): Target | null {
   if (toks.length === 2) {
     if (isKw(a, "nearest") && toks[1].s === "num") return { k: "nearest", m: toks[1].d };
     if (a.s === "num" && (isKw(toks[1], "dp") || isKw(toks[1], "digits"))) return { k: "dp", n: a.d.toNumber() };
+  }
+  // "to nearest 16th": ordinal step means 1/16, shown as a fraction
+  if (toks.length === 3 && isKw(a, "nearest") && toks[1].s === "num" && toks[2].s === "aff") {
+    const ord = toks[2].w.toLowerCase();
+    if ((ord === "st" || ord === "nd" || ord === "rd" || ord === "th") && toks[1].d.isInteger() && !toks[1].d.isZero()) {
+      return { k: "nearest", m: new Decimal(1).div(toks[1].d.abs()), frac: true };
+    }
+  }
+  // "to nearest 1/16": fractional step, shown as a fraction
+  if (toks.length === 4 && isKw(a, "nearest") && toks[1].s === "num" && isOp(toks[2], "/") && toks[3].s === "num") {
+    const n = toks[1].d;
+    const d = toks[3].d;
+    if (!d.isZero()) return { k: "nearest", m: n.div(d), frac: true };
   }
   // fuel economy targets: "in km/l" and "in l/100km" (before the generic rate rule)
   if (toks.length === 3 && a.s === "unit" && isOp(toks[1], "/") && toks[2].s === "unit" && a.unit.id === "km" && toks[2].unit.id === "l") {

@@ -221,6 +221,14 @@ const GOLDENS: [string, string][] = [
   ["int(0o55)", "45"],
   ["0xCAFE_F00D as number", "3,405,705,229"],
 
+  // 1.3 mixed fractions and nearest fraction
+  ["1 1/2", "1.5"],
+  ["1 1/2 pounds in kg", "0.68 kg"],
+  ["my 1 1/2 pounds in kg for fun", "0.68 kg"],
+  ["0.534 to nearest 16th", "9/16"],
+  ["0.534 to nearest 1/16", "9/16"],
+  ["50% as fraction", "1/2"],
+
   // word skipping
   ["lunch was $18.50 + 20% tip", "$22.20"],
   ["answer 42 costs $10", "$10.00"],

@@ -614,8 +614,11 @@ export function convertValue(v: Value, t: Target): Value {
       return { ...v, disp: { ...v.disp, dp: t.n } };
     case "nearest": {
       if (t.m.isZero()) bad();
-      if (v.kind === "number" || v.kind === "quantity" || v.kind === "percent")
-        return { ...v, d: v.d.div(t.m).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).mul(t.m) };
+      if (v.kind === "number" || v.kind === "quantity" || v.kind === "percent") {
+        const rounded = v.d.div(t.m).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).mul(t.m);
+        if (t.frac && v.kind === "number") return { ...v, d: rounded, disp: { ...v.disp, mode: "fraction" } };
+        return { ...v, d: rounded };
+      }
       bad();
     }
   }
