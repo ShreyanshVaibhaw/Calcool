@@ -209,6 +209,18 @@ const GOLDENS: [string, string][] = [
   ["100 is what multiple of 50", "2x"],
   ["20/5 as x", "4x"],
 
+  // 1.2 bitwise and base functions
+  ["0xFF & 0x0F", "15"],
+  ["5 xor 3", "6"],
+  ["5 | 3", "7"],
+  ["1 << 4", "16"],
+  ["256 >> 4", "16"],
+  ["hex(99)", "0x63"],
+  ["bin(10)", "0b1010"],
+  ["oct(64)", "0o100"],
+  ["int(0o55)", "45"],
+  ["0xCAFE_F00D as number", "3,405,705,229"],
+
   // word skipping
   ["lunch was $18.50 + 20% tip", "$22.20"],
   ["answer 42 costs $10", "$10.00"],

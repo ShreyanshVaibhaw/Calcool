@@ -89,6 +89,7 @@ export const AGGS = new Set(["total", "sum", "average", "avg", "count", "median"
 const FNS = new Set([
   "sqrt", "cbrt", "abs", "round", "ceil", "floor", "fact", "factorial", "ln", "log", "log2", "log10", "exp",
   "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "sind", "cosd", "tand", "min", "max",
+  "hex", "bin", "oct", "int",
 ]);
 const FMTS = new Set(["hex", "hexadecimal", "binary", "bin", "octal", "oct", "decimal", "dec", "number", "num", "fraction", "percent", "percentage", "sci", "scientific", "pitch", "frames", "multiplier", "multiple", "multiples", "x"]);
 // Plain number words: zero to ninety plus hundred/thousand/million/billion/trillion.
@@ -431,6 +432,12 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
       i++;
       continue;
     }
+    if (lower === "xor") {
+      S({ s: "op", op: "xor", spacedL: true, from: t.from, to: t.to });
+      M(t.from, t.to, "operator");
+      i++;
+      continue;
+    }
     const refMatch = /^line(\d+)$/.exec(lower);
     if (refMatch) {
       const idx = parseInt(refMatch[1], 10) - 1;
@@ -455,6 +462,13 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
     if (AGGS.has(lower) || KWS.has(lower)) {
       S({ s: "kw", kw: lower === "avg" ? "average" : lower, from: t.from, to: t.to });
       M(t.from, t.to, "keyword");
+      i++;
+      continue;
+    }
+    // hex/bin/oct double as functions when called with parens: hex(99). Otherwise they stay formats.
+    if (FNS.has(lower) && FMTS.has(lower) && raw[i + 1]?.t === "lp") {
+      S({ s: "fn", name: lower, from: t.from, to: t.to });
+      M(t.from, t.to, "function");
       i++;
       continue;
     }
@@ -1114,6 +1128,21 @@ function parseExpr(sig: Sig[], pos: number, minBp: number): PE | null {
     if (t.s === "op" && (t.op === "+" || t.op === "-")) {
       op = t.op;
       bp = 2;
+    } else if (t.s === "op" && (t.op === "<<" || t.op === ">>")) {
+      op = t.op;
+      bp = 1;
+    } else if (t.s === "op" && t.op === "&") {
+      op = "&";
+      bp = 0.8;
+    } else if (t.s === "op" && t.op === "xor") {
+      op = "xor";
+      bp = 0.6;
+    } else if (t.s === "kw" && t.kw === "xor") {
+      op = "xor";
+      bp = 0.6;
+    } else if (t.s === "op" && t.op === "|") {
+      op = "|";
+      bp = 0.4;
     } else if (t.s === "kw" && (t.kw === "off" || t.kw === "on")) {
       op = t.kw;
       bp = 2;

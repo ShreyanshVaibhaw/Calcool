@@ -104,6 +104,16 @@ export function tokenize(line: string): RawTok[] {
       i += 2;
       continue;
     }
+    if (two === "<<" || two === ">>") {
+      push({ t: "op", op: two, from: i, to: i + 2, spacedL });
+      i += 2;
+      continue;
+    }
+    if (two === "&&" || two === "||") {
+      push({ t: "op", op: two === "&&" ? "&" : "|", from: i, to: i + 2, spacedL });
+      i += 2;
+      continue;
+    }
     if (two === "==" || two === "!=" || two === ">=" || two === "<=") {
       // comparisons are post-v1; tokenized so the classifier can drop them cleanly
       push({ t: "op", op: two, from: i, to: i + 2, spacedL });
@@ -111,7 +121,7 @@ export function tokenize(line: string): RawTok[] {
       continue;
     }
 
-    if ("+-*/^%=:<>".includes(c) || c === "×" || c === "÷" || c === "−") {
+    if ("+-*/^%=:<>&|".includes(c) || c === "×" || c === "÷" || c === "−") {
       const op = c === "×" ? "*" : c === "÷" ? "/" : c === "−" ? "-" : c;
       push({ t: "op", op, from: i, to: i + 1, spacedL });
       i++;

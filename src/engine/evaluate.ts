@@ -226,6 +226,27 @@ export function binop(op: string, l: Value, r: Value): Value {
       return bad();
     }
 
+    case "&":
+    case "|":
+    case "xor":
+    case "<<":
+    case ">>": {
+      if (l.kind !== "number" || r.kind !== "number") bad();
+      if (!l.d.isInteger() || !r.d.isInteger()) bad();
+      const a = l.d.toNumber();
+      const b = r.d.toNumber();
+      if (!Number.isSafeInteger(a) || !Number.isSafeInteger(b)) bad();
+      const a32 = a | 0;
+      const b32 = b | 0;
+      let out: number;
+      if (op === "&") out = a32 & b32;
+      else if (op === "|") out = a32 | b32;
+      else if (op === "xor") out = a32 ^ b32;
+      else if (op === "<<") out = a32 << b32;
+      else out = a32 >> b32;
+      return N(new Decimal(out));
+    }
+
     case "of": {
       if (l.kind === "percent") {
         if (r.kind === "number") return N(r.d.mul(l.d).div(100));
@@ -398,6 +419,14 @@ function applyFn(name: string, args: Value[]): Value {
       return N(Decimal.sqrt(asNum(one)));
     case "cbrt":
       return N(Decimal.cbrt(asNum(one)));
+    case "hex":
+      return { kind: "number", d: asNum(one), disp: { mode: "hex" } };
+    case "bin":
+      return { kind: "number", d: asNum(one), disp: { mode: "bin" } };
+    case "oct":
+      return { kind: "number", d: asNum(one), disp: { mode: "oct" } };
+    case "int":
+      return N(asNum(one).toDecimalPlaces(0, Decimal.ROUND_DOWN));
     case "abs":
       return { ...one, d: one.d.abs() };
     case "round":
