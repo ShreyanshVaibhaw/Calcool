@@ -380,6 +380,12 @@ body {
   border: 1px solid var(--sep);
 }
 
+/* Collapsed sidebar: the floating reopen button overlays the editor,
+   so shift the editor right to keep the first columns readable. */
+.app.collapsed .editor-wrap {
+  padding-left: 36px;
+}
+
 /* ---- appearance and updates ---- */
 
 .settings-dialog {

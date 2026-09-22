@@ -180,7 +180,7 @@ function App() {
   };
 
   return (
-    <div className="app">
+    <div className={collapsed ? "app collapsed" : "app"}>
       {!collapsed && (
         <aside className="sidebar">
           <div className="sidebar-top">
