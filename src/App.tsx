@@ -4,6 +4,7 @@ import { loadRates } from "./rates";
 import SettingsDialog from "./SettingsDialog";
 import { readTheme, saveTheme, type ThemeId } from "./theme";
 import { loadBook, saveBook, newSheetObj, sheetTitle, decodeImportedFile, downloadFile, encodeSlvr, type Book, type Sheet } from "./storage";
+import { sheetRows, toCSV, toHTML } from "./export";
 import "./App.css";
 
 const SIDEBAR_KEY = "calcool.sidebar";
@@ -29,7 +30,7 @@ function App() {
   const [filter, setFilter] = useState("");
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
-  const [exportFmt, setExportFmt] = useState<"calcool" | "txt" | "slvr">("calcool");
+  const [exportFmt, setExportFmt] = useState<"calcool" | "txt" | "slvr" | "csv" | "html">("calcool");
   const [dropFolder, setDropFolder] = useState<string | null>(null); // "inbox" or a folder name
   const fileRef = useRef<HTMLInputElement>(null);
   const [theme, setTheme] = useState<ThemeId>(readTheme);
@@ -230,6 +231,8 @@ function App() {
     const text = s.id === book.activeId ? (handle.current?.getDoc() ?? s.text) : s.text;
     const title = (s.name || sheetTitle(text)).replace(/[<>:"/\\|?*]/g, "").trim() || "Untitled";
     if (exportFmt === "slvr") downloadFile(`${title}.slvr`, encodeSlvr(title, text), "application/json");
+    else if (exportFmt === "csv") downloadFile(`${title}.csv`, toCSV(sheetRows(text)), "text/csv");
+    else if (exportFmt === "html") downloadFile(`${title}.html`, toHTML(title, sheetRows(text)), "text/html");
     else downloadFile(`${title}.${exportFmt}`, text);
   };
 
@@ -413,9 +416,14 @@ function App() {
                 <option value="calcool">.calcool</option>
                 <option value="txt">.txt</option>
                 <option value="slvr">.slvr</option>
+                <option value="csv">.csv</option>
+                <option value="html">.html</option>
               </select>
               <button className="io-btn" type="button" title="Export the active sheet" onClick={exportActive}>
                 Export
+              </button>
+              <button className="io-btn" type="button" title="Print the active sheet (PDF via your printer)" onClick={() => window.print()}>
+                Print
               </button>
               <button className="io-btn" type="button" title="Import .txt, .calcool, .slvr files" onClick={() => fileRef.current?.click()}>
                 Import

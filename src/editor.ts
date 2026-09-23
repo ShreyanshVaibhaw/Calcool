@@ -3,6 +3,7 @@ import { EditorState, StateField, StateEffect, RangeSetBuilder, MapMode, ChangeS
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { searchKeymap, highlightSelectionMatches, openSearchPanel, gotoLine, searchPanelOpen } from "@codemirror/search";
 import { evaluateSheet, SheetOut } from "./engine/sheet";
+import { copyLineText, plainAnswer } from "./export";
 import { Decimal } from "./engine/value";
 
 export const recalc = StateEffect.define<null>();
@@ -324,6 +325,7 @@ function scrubbing(): Extension {
 interface Row {
   top: number;
   text: string;
+  line: string;
   kind: string;
   lineNo: number;
 }
@@ -359,7 +361,7 @@ const answers = ViewPlugin.fromClass(
             const lineNo = view.state.doc.lineAt(block.from).number;
             const out = sheet.lines[lineNo - 1];
             if (!out || !out.formatted) continue;
-            rows.push({ top: baseTop + block.top, text: out.formatted, kind: out.kind, lineNo });
+            rows.push({ top: baseTop + block.top, text: out.formatted, line: view.state.doc.lineAt(block.from).text, kind: out.kind, lineNo });
           }
           return rows;
         },
@@ -372,17 +374,19 @@ const answers = ViewPlugin.fromClass(
             el.className = "ck-answer" + (r.kind === "aggregate" ? " ck-answer-total" : "") + (r.kind === "assign" ? " ck-answer-var" : "");
             el.style.top = `${r.top}px`;
             el.textContent = r.text;
-            el.title = "Click to copy · double-click to insert a reference · drag into a line";
+            el.title = "Click to copy · Shift+click copies the line · Alt+click copies plain · double-click to insert a reference · drag into a line";
             el.draggable = true;
             el.addEventListener("mousedown", (e) => e.preventDefault()); // keep editor focus
             el.addEventListener("dragstart", (e) => {
               e.dataTransfer?.setData("text/plain", `line${r.lineNo}`);
             });
             let copyTimer: ReturnType<typeof setTimeout> | undefined;
-            el.addEventListener("click", () => {
+            el.addEventListener("click", (e) => {
               clearTimeout(copyTimer);
+              const { shiftKey, altKey } = e;
               copyTimer = setTimeout(() => {
-                navigator.clipboard.writeText(r.text).catch(() => {});
+                const text = shiftKey ? copyLineText(r.line, r.text) : altKey ? plainAnswer(r.text) : r.text;
+                navigator.clipboard.writeText(text).catch(() => {});
                 el.classList.add("ck-copied");
                 setTimeout(() => el.classList.remove("ck-copied"), 500);
               }, 260);

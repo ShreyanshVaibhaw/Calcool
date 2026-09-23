@@ -200,6 +200,14 @@ body {
   display: flex;
 }
 
+@media print {
+  body { overflow: visible; }
+  .sidebar, .sidebar-open, .total-pill, .settings-dialog, .cm-panels, .cm-dialog { display: none !important; }
+  .app { display: block; height: auto; }
+  .editor-wrap { overflow: visible; }
+  .ck-answer { color: #000; }
+}
+
 /* ---- sidebar ---- */
 
 .sidebar {
