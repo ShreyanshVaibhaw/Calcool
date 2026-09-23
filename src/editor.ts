@@ -2,7 +2,10 @@ import { EditorView, ViewPlugin, ViewUpdate, Decoration, DecorationSet, WidgetTy
 import { EditorState, StateField, StateEffect, RangeSetBuilder, MapMode, ChangeSpec, Transaction, Extension, EditorSelection } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { searchKeymap, highlightSelectionMatches, openSearchPanel, gotoLine, searchPanelOpen } from "@codemirror/search";
-import { evaluateSheet, SheetOut } from "./engine/sheet";
+import { autocompletion, completionKeymap, startCompletion } from "@codemirror/autocomplete";
+import type { Completion, CompletionContext } from "@codemirror/autocomplete";
+import { evaluateSheet, SheetOut, renameVariable } from "./engine/sheet";
+import { collectVariables, variableAt, variableUses } from "./vars";
 import { copyLineText, plainAnswer } from "./export";
 import { Decimal } from "./engine/value";
 
@@ -262,6 +265,97 @@ function moveLineTo(view: EditorView, fromLine: number, toLine: number): boolean
   const anchor = Math.min(toLine, view.state.doc.lines);
   view.dispatch({ selection: EditorSelection.cursor(view.state.doc.line(anchor).from) });
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// variable completion, rename, and use highlighting
+// ---------------------------------------------------------------------------
+
+// complete variable names defined above the cursor; multi-word names apply
+// cleanly when the head already precedes the word being typed
+function varCompletions(context: CompletionContext) {
+  const word = context.matchBefore(/\w+/);
+  if (!word && !context.explicit) return null;
+  const typed = word ? word.text : "";
+  const doc = context.state.doc;
+  const curLine = doc.lineAt(context.pos).number;
+  const vars = collectVariables(doc.toString(), curLine);
+  const options = vars
+    .filter((v) => !typed || v === typed || v.startsWith(typed) || v.endsWith(` ${typed}`) || v.includes(` ${typed} `))
+    .map((v) => ({
+      label: v,
+      type: "variable",
+      apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
+        let start = from;
+        const head = typed && v.endsWith(` ${typed}`) ? v.slice(0, v.length - typed.length) : "";
+        if (head) {
+          const line = view.state.doc.lineAt(from);
+          const before = line.text.slice(0, from - line.from);
+          if (before.toLowerCase().endsWith(head.toLowerCase())) start = from - head.length;
+        }
+        view.dispatch({
+          changes: { from: start, to, insert: v },
+          selection: EditorSelection.cursor(start + v.length),
+        });
+      },
+    }));
+  if (!options.length) return null;
+  return { from: word ? word.from : context.pos, options, validFor: /^\w*$/ };
+}
+
+// F2 renames the variable under the cursor everywhere, in a single undo step
+function renameVarAtCursor(view: EditorView): boolean {
+  const { state } = view;
+  const head = state.selection.main.head;
+  const line = state.doc.lineAt(head);
+  const name = variableAt(state.doc.toString(), line.number, head - line.from);
+  if (!name) return false;
+  const { close, result } = showDialog(view, {
+    label: `Rename ${name} to`,
+    input: { type: "text", name: "name", value: name },
+    focus: true,
+    submitLabel: "rename",
+  });
+  void result.then((form) => {
+    const input = form?.elements.namedItem("name");
+    const next = input instanceof HTMLInputElement ? input.value.trim() : "";
+    view.dispatch({ effects: close });
+    if (!next || next.toLowerCase() === name) return;
+    const text = view.state.doc.toString();
+    const renamed = renameVariable(text, name, next);
+    if (renamed === text) return;
+    view.dispatch({ changes: { from: 0, to: text.length, insert: renamed } });
+    view.focus();
+  });
+  return true;
+}
+
+// the variable under the cursor, for use highlighting (null when none)
+const varUseField = StateField.define<string | null>({
+  create: (s) => {
+    if (!s.selection.main.empty) return null;
+    const head = s.selection.main.head;
+    const line = s.doc.lineAt(head);
+    return variableAt(s.doc.toString(), line.number, head - line.from);
+  },
+  update: (v, tr) => {
+    if (!tr.docChanged && !tr.selection) return v;
+    const s = tr.state;
+    if (!s.selection.main.empty) return null;
+    const head = s.selection.main.head;
+    const line = s.doc.lineAt(head);
+    return variableAt(s.doc.toString(), line.number, head - line.from);
+  },
+});
+
+function varUseDecos(state: EditorState): DecorationSet {
+  const builder = new RangeSetBuilder<Decoration>();
+  const name = state.field(varUseField, false);
+  if (!name) return builder.finish();
+  for (const r of variableUses(state.doc.toString(), name)) {
+    builder.add(r.from, r.to, Decoration.mark({ class: "ck-var-use" }));
+  }
+  return builder.finish();
 }
 
 // reference insertion helpers
@@ -578,10 +672,14 @@ export function createEditor(
       { key: "Mod-h", run: openReplacePanel, preventDefault: true },
       // Mod-d is duplicate-line here, not the search panel's select-next
       ...searchKeymap.filter((b) => b.key !== "Mod-d"),
+      ...completionKeymap,
       { key: "Mod-d", run: duplicateLines, preventDefault: true },
       { key: "Mod-/", run: toggleComment, preventDefault: true },
       { key: "Mod-t", run: insertSubtotal, preventDefault: true },
       { key: "Mod-l", run: insertLineRef, preventDefault: true },
+      { key: "F2", run: renameVarAtCursor },
+      { key: "Mod-r", run: renameVarAtCursor, preventDefault: true },
+      { key: "Ctrl-Space", run: startCompletion },
       {
         key: "Ctrl-\\",
         run: (view) => {
@@ -600,6 +698,9 @@ export function createEditor(
     operatorAutoRef,
     scrubbing(),
     highlightSelectionMatches(),
+    autocompletion({ override: [varCompletions] }),
+    varUseField,
+    EditorView.decorations.compute([varUseField], (s) => varUseDecos(s)),
     EditorView.decorations.compute([sheetField], (s) => getDecos(s).marks),
     EditorView.decorations.compute([sheetField], (s) => getDecos(s).refs),
     EditorView.atomicRanges.of((view) => getDecos(view.state).refs),

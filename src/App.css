@@ -768,6 +768,14 @@ body {
 .ck-label { color: var(--fg); font-weight: 600; }
 .ck-tag { color: var(--kw); font-weight: 600; }
 
+/* variable under the cursor and its uses */
+.ck-var-use { background: color-mix(in srgb, var(--var) 16%, transparent); border-radius: 3px; }
+
+/* completion list follows the app theme */
+.cm-editor .cm-tooltip-autocomplete { background: var(--panel); color: var(--fg); border: 1px solid var(--sep); }
+.cm-editor .cm-tooltip-autocomplete > ul > li[aria-selected] { background: var(--sel); color: var(--fg); }
+.cm-editor .cm-completionDetail { color: var(--prose); }
+
 /* find/replace panel and go-to-line dialog follow the app theme */
 .cm-editor .cm-panels { background: var(--panel); color: var(--fg); }
 .cm-editor .cm-panels-top { border-bottom: 1px solid var(--sep); }

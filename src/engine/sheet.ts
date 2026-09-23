@@ -35,7 +35,10 @@ interface Masked {
   spans: { from: number; to: number }[];
 }
 
-function maskComments(line: string): Masked {
+export type { Masked };
+
+export function maskComments(line: string): Masked {
+
   const spans: { from: number; to: number }[] = [];
 
   // "quoted text" is commentary; a quote glued to a digit is an inch mark (3' 4"), not a quote
