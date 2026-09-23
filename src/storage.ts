@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { loadSettings } from "./settings";
 
 // The sheetbook: real .calcool text files in Documents\Calcool (via Rust commands)
 // inside the app, plain localStorage in the browser dev build. book.json in the
@@ -164,6 +165,12 @@ async function flushFs(book: Book): Promise<void> {
   await invoke("book_save", { index: indexJson(book, files), writes, renames, deletes });
   for (const id of [...onDisk.keys()]) if (!seen.has(id)) onDisk.delete(id);
   for (const s of book.sheets) onDisk.set(s.id, { file: files.get(s.id)!, text: s.text });
+  // optional one-way mirror into a cloud folder; never blocks the real save
+  const syncDir = loadSettings().syncFolder?.trim();
+  if (syncDir) {
+    const mirror: [string, string][] = book.sheets.map((s) => [files.get(s.id)!, s.text]);
+    await invoke("sync_mirror", { dir: syncDir, files: mirror }).catch((e) => console.error("sync mirror failed", e));
+  }
 }
 
 async function loadBookFs(): Promise<Book> {

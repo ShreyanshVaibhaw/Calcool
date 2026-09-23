@@ -27,6 +27,17 @@ npm run tauri dev    # the actual Windows app, debug
 npm run tauri build  # release build; installers land in src-tauri/target/release/bundle/
 ```
 
+## CLI and sync folder
+
+```
+bin\calcool "June 20 + 3 weeks"   # prints 11 July (reuses the app engine, offline rates)
+echo 100 pounds in kg | bin\calcool
+```
+
+Quote the expression; in cmd a `^` power needs spaces (`"2 ^ 3"`).
+`npm run cli -- ...` works too for single-word expressions, but npm mangles quoted spaces on Windows, so the batch file is the real entry point.
+Settings has an optional sync folder: every save mirrors each sheet there as a `.calcool` text file, so OneDrive/Dropbox picks it up. Last write wins; `Documents\Calcool` stays the source of truth.
+
 ## Works today
 
 - Live per-line answers, word skipping, syntax highlighting, click-to-copy, quick total pill, autosave

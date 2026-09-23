@@ -80,6 +80,36 @@ fn open_book_dir(app: tauri::AppHandle) -> Result<(), String> {
     app.opener().open_path(dir.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
 }
 
+// one-way mirror of the current sheets into an optional sync folder
+// (OneDrive/Dropbox): full state on every save, last-write-wins.
+// Documents\Calcool stays the source of truth; no index file is written here.
+#[tauri::command]
+fn sync_mirror(dir: String, files: Vec<(String, String)>) -> Result<(), String> {
+    let dir = std::path::PathBuf::from(&dir);
+    if !dir.is_absolute() {
+        return Err("sync folder must be an absolute path".into());
+    }
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let mut keep = std::collections::HashSet::new();
+    for (name, text) in &files {
+        if safe_name(name) {
+            std::fs::write(dir.join(name), text).map_err(|e| e.to_string())?;
+            keep.insert(name.clone());
+        }
+    }
+    for e in std::fs::read_dir(&dir).map_err(|e| e.to_string())?.flatten() {
+        let p = e.path();
+        if p.extension().and_then(|s| s.to_str()) == Some("calcool") {
+            if let Some(n) = p.file_name().and_then(|s| s.to_str()) {
+                if !keep.contains(n) {
+                    let _ = std::fs::remove_file(&p);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 // Alt+Space is often owned by launchers (Flow Launcher, PowerToys Run); fall through until one sticks
 const HOTKEY_CANDIDATES: [&str; 5] = ["Alt+Space", "Ctrl+Alt+Space", "Alt+Shift+Space", "Ctrl+Shift+Space", "Alt+Q"];
 
@@ -179,7 +209,7 @@ pub fn run() {
             // a second launch focuses the open window instead of opening a new one
             show_main(app);
         }))
-        .invoke_handler(tauri::generate_handler![set_hotkey, book_load, book_save, open_book_dir])
+        .invoke_handler(tauri::generate_handler![set_hotkey, book_load, book_save, open_book_dir, sync_mirror])
         .setup(|app| {
             if let Err(e) = build_tray(app.handle()) {
                 eprintln!("[tray] build failed: {e:?}");

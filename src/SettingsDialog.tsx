@@ -213,6 +213,21 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
               </button>
             </div>
           )}
+          {canOpenBookFolder && (
+            <div className="setting-row">
+              <label htmlFor="set-sync">Sync folder (optional)</label>
+              <input
+                id="set-sync"
+                type="text"
+                placeholder="e.g. C:\Users\me\OneDrive\Calcool"
+                value={settings.syncFolder ?? ""}
+                onChange={(e) => update({ syncFolder: e.target.value })}
+              />
+            </div>
+          )}
+          {canOpenBookFolder && !!settings.syncFolder?.trim() && (
+            <p className="setting-hint">Each save mirrors every sheet there as a text file. Last write wins; Documents\Calcool stays the source of truth.</p>
+          )}
         </section>
 
         <section className="update-panel" aria-labelledby="updates-title">

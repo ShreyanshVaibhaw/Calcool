@@ -16,6 +16,7 @@ export interface Settings {
   fontSize: number; // editor px
   fontFamily: string; // "" = theme font
   hotkey: string; // quick-popup accelerator; "" = automatic candidate chain
+  syncFolder: string; // optional mirror dir for sheets (OneDrive/Dropbox); "" = off
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -29,6 +30,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fontSize: 15,
   fontFamily: "",
   hotkey: "",
+  syncFolder: "",
 };
 
 export const FONT_CHOICES = [
