@@ -664,4 +664,15 @@ describe("sheet behavior", () => {
     const s = evaluateSheet("$10\n$20\ntotal\n\n$5");
     expect(s.totalFormatted).toBe("$30.00");
   });
+
+  test("quick total modes cover the same pool", () => {
+    const s = evaluateSheet("$10\n$20\n$30");
+    expect(s.modes).toEqual({ sum: "$60.00", average: "$20.00", count: "3", median: "$20.00" });
+  });
+
+  test("quick total modes skip answer-less lines", () => {
+    const s = evaluateSheet("hello\n$10\n\n$20");
+    expect(s.modes.count).toBe("2");
+    expect(s.modes.sum).toBe("$30.00");
+  });
 });

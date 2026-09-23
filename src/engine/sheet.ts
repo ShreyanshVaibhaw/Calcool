@@ -20,6 +20,14 @@ export interface SheetOut {
   lines: LineOut[];
   total: Value | null;
   totalFormatted: string;
+  modes: ModeTotals; // sum / average / count / median over the same pool, for the pill
+}
+
+export interface ModeTotals {
+  sum: string;
+  average: string;
+  count: string;
+  median: string;
 }
 
 interface Masked {
@@ -88,6 +96,13 @@ function windowAggregate(name: string, out: LineOut[]): Value | null {
     if (l.value) collected.push(l.value);
   }
   const usable = collected.filter((v) => v.kind !== "percent" && v.kind !== "date" && v.kind !== "time" && v.kind !== "bool");
+  return aggregateValues(name, usable);
+}
+
+const usableValue = (v: Value): boolean => v.kind !== "percent" && v.kind !== "date" && v.kind !== "time" && v.kind !== "bool";
+
+// Shared fold for block aggregates, tagged aggregates, and the quick-total modes.
+function aggregateValues(name: string, usable: Value[]): Value | null {
   if (!usable.length) return null;
   try {
     switch (name) {
@@ -122,6 +137,24 @@ function windowAggregate(name: string, out: LineOut[]): Value | null {
     return null;
   }
   return null;
+}
+
+function modeTotals(pool: Value[]): ModeTotals {
+  const fmt = (v: Value | null): string => {
+    if (!v) return "";
+    try {
+      return formatValue(v);
+    } catch {
+      return "";
+    }
+  };
+  const usable = pool.filter(usableValue);
+  return {
+    sum: fmt(aggregateValues("total", usable)),
+    average: fmt(aggregateValues("average", usable)),
+    count: fmt(aggregateValues("count", usable)),
+    median: fmt(aggregateValues("median", usable)),
+  };
 }
 
 // A line holding nothing but a percent ("10%", "tip 10%") applies to the running
@@ -158,41 +191,7 @@ function taggedAggregate(name: string, tag: string, out: LineOut[]): Value | nul
     if (l.kind === "empty" || l.kind === "heading" || l.kind === "divider" || l.kind === "aggregate") break;
     if (l.value && l.tags.includes(tag)) collected.push(l.value);
   }
-  const usable = collected.filter((v) => v.kind !== "percent" && v.kind !== "date" && v.kind !== "time" && v.kind !== "bool");
-  if (!usable.length) return null;
-  try {
-    switch (name) {
-      case "total":
-      case "sum":
-        return fold(usable);
-      case "count":
-        return { kind: "number", d: new Decimal(usable.length) };
-      case "average": {
-        const s = fold(usable);
-        if (!s) return null;
-        return { ...s, d: s.d.div(usable.length) };
-      }
-      case "median": {
-        const sorted = [...usable].sort((a, b) => a.d.cmp(b.d));
-        const mid = Math.floor(sorted.length / 2);
-        if (sorted.length % 2 === 1) return sorted[mid];
-        const s = addValues(sorted[mid - 1], sorted[mid]);
-        return { ...s, d: s.d.div(2) };
-      }
-      case "min":
-      case "max": {
-        let best = usable[0];
-        for (const v of usable.slice(1)) {
-          const better = name === "max" ? baseKey(v).gt(baseKey(best)) : baseKey(v).lt(baseKey(best));
-          if (better) best = v;
-        }
-        return best;
-      }
-    }
-  } catch {
-    return null;
-  }
-  return null;
+  return aggregateValues(name, collected.filter(usableValue));
 }
 
 export function evaluateSheet(text: string): SheetOut {
@@ -402,7 +401,7 @@ export function evaluateSheet(text: string): SheetOut {
       /* leave empty */
     }
   }
-  return { lines: out, total, totalFormatted };
+  return { lines: out, total, totalFormatted, modes: modeTotals(pool) };
 }
 
 const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

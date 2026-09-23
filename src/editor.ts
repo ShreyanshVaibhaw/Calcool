@@ -1,5 +1,5 @@
-import { EditorView, ViewPlugin, ViewUpdate, Decoration, DecorationSet, WidgetType, keymap, drawSelection, highlightActiveLine } from "@codemirror/view";
-import { EditorState, StateField, StateEffect, RangeSetBuilder, MapMode, ChangeSpec, Transaction, Extension } from "@codemirror/state";
+import { EditorView, ViewPlugin, ViewUpdate, Decoration, DecorationSet, WidgetType, keymap, drawSelection, highlightActiveLine, showDialog } from "@codemirror/view";
+import { EditorState, StateField, StateEffect, RangeSetBuilder, MapMode, ChangeSpec, Transaction, Extension, EditorSelection } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { searchKeymap, highlightSelectionMatches, openSearchPanel, gotoLine, searchPanelOpen } from "@codemirror/search";
 import { evaluateSheet, SheetOut } from "./engine/sheet";
@@ -153,6 +153,117 @@ function openReplacePanel(view: EditorView): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// line actions: duplicate, comment toggle, subtotal, line reference
+// ---------------------------------------------------------------------------
+
+// lines touched by the main selection, expanded to whole lines
+function selectedLines(state: EditorState): { from: number; to: number }[] {
+  const { from, to } = state.selection.main;
+  const first = state.doc.lineAt(from).number;
+  const lastLine = state.doc.lineAt(to);
+  const last = to > lastLine.from ? lastLine.number : Math.max(first, lastLine.number - (to > from ? 1 : 0));
+  return [{ from: first, to: Math.max(first, last) }];
+}
+
+// Ctrl+D duplicates the selected lines below them
+function duplicateLines(view: EditorView): boolean {
+  const { state } = view;
+  const [{ from, to }] = selectedLines(state);
+  const block = Array.from({ length: to - from + 1 }, (_, k) => state.doc.line(from + k).text).join("\n");
+  const insertAt = state.doc.line(to).to;
+  const anchor = insertAt + 1 + (state.selection.main.head - state.doc.lineAt(state.selection.main.head).from);
+  view.dispatch({
+    changes: { from: insertAt, insert: "\n" + block },
+    selection: EditorSelection.cursor(Math.min(anchor, insertAt + 1 + block.length)),
+  });
+  return true;
+}
+
+// Ctrl+/ toggles // on the selected lines
+function toggleComment(view: EditorView): boolean {
+  const { state } = view;
+  const [{ from, to }] = selectedLines(state);
+  const changes: ChangeSpec[] = [];
+  for (let n = from; n <= to; n++) {
+    const line = state.doc.line(n);
+    const m = /^(\s*)\/\/ ?/.exec(line.text);
+    if (m) changes.push({ from: line.from + m[1].length, to: line.from + m[0].length });
+    else {
+      const indent = /^\s*/.exec(line.text)?.[0] ?? "";
+      changes.push({ from: line.from + indent.length, insert: "// " });
+    }
+  }
+  if (!changes.length) return false;
+  view.dispatch({ changes });
+  return true;
+}
+
+// Ctrl+T inserts a total line below the cursor
+function insertSubtotal(view: EditorView): boolean {
+  const { state } = view;
+  const line = state.doc.lineAt(state.selection.main.head);
+  view.dispatch({
+    changes: { from: line.to, insert: "\ntotal" },
+    selection: EditorSelection.cursor(line.to + "\ntotal".length),
+  });
+  return true;
+}
+
+// Ctrl+L asks for a line number and inserts a live lineN reference to it
+function insertLineRef(view: EditorView): boolean {
+  const cur = view.state.doc.lineAt(view.state.selection.main.head).number;
+  const { close, result } = showDialog(view, {
+    label: "Reference line",
+    input: { type: "text", name: "line", value: String(Math.max(1, cur - 1)) },
+    focus: true,
+    submitLabel: "go",
+  });
+  void result.then((form) => {
+    const input = form?.elements.namedItem("line");
+    const n = parseInt(input instanceof HTMLInputElement ? input.value : "", 10);
+    if (!Number.isInteger(n)) {
+      view.dispatch({ effects: close });
+      return;
+    }
+    const target = Math.max(1, Math.min(view.state.doc.lines, n));
+    if (target >= view.state.doc.lineAt(view.state.selection.main.head).number) {
+      view.dispatch({ effects: close }); // references only reach upward
+      return;
+    }
+    const sel = view.state.selection.main;
+    view.dispatch({
+      changes: { from: sel.from, to: sel.to, insert: `line${target}` },
+      effects: close,
+    });
+    view.focus();
+  });
+  return true;
+}
+
+// drag an answer onto another answer to move its line below that line
+function moveLineTo(view: EditorView, fromLine: number, toLine: number): boolean {
+  const doc = view.state.doc;
+  if (fromLine < 1 || fromLine > doc.lines || toLine < 1 || toLine > doc.lines || fromLine === toLine) return false;
+  const src = doc.line(fromLine).text;
+  const delFrom = fromLine < doc.lines ? doc.line(fromLine).from : doc.line(fromLine - 1).to;
+  const delTo = fromLine < doc.lines ? doc.line(fromLine + 1).from : doc.line(fromLine).to;
+  const changes: ChangeSpec[] =
+    fromLine < toLine
+      ? [
+          { from: delFrom, to: delTo },
+          { from: doc.line(toLine).to, insert: "\n" + src },
+        ]
+      : [
+          { from: doc.line(toLine).from, insert: src + "\n" },
+          { from: delFrom, to: delTo },
+        ];
+  view.dispatch({ changes });
+  const anchor = Math.min(toLine, view.state.doc.lines);
+  view.dispatch({ selection: EditorSelection.cursor(view.state.doc.line(anchor).from) });
+  return true;
+}
+
 // reference insertion helpers
 // ---------------------------------------------------------------------------
 
@@ -379,6 +490,15 @@ const answers = ViewPlugin.fromClass(
             el.addEventListener("mousedown", (e) => e.preventDefault()); // keep editor focus
             el.addEventListener("dragstart", (e) => {
               e.dataTransfer?.setData("text/plain", `line${r.lineNo}`);
+              e.dataTransfer?.setData("text/sourceline", String(r.lineNo));
+            });
+            // dropping an answer here moves its line below this one (tokens renumber after)
+            el.addEventListener("dragover", (e) => e.preventDefault());
+            el.addEventListener("drop", (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const src = parseInt(e.dataTransfer?.getData("text/sourceline") ?? "", 10);
+              if (Number.isInteger(src)) moveLineTo(view, src, r.lineNo);
             });
             let copyTimer: ReturnType<typeof setTimeout> | undefined;
             el.addEventListener("click", (e) => {
@@ -456,8 +576,12 @@ export function createEditor(
     keymap.of([
       { key: "Ctrl-g", run: gotoLine, preventDefault: true },
       { key: "Mod-h", run: openReplacePanel, preventDefault: true },
-      // Ctrl+D stays free for duplicate-line in 2.4
+      // Mod-d is duplicate-line here, not the search panel's select-next
       ...searchKeymap.filter((b) => b.key !== "Mod-d"),
+      { key: "Mod-d", run: duplicateLines, preventDefault: true },
+      { key: "Mod-/", run: toggleComment, preventDefault: true },
+      { key: "Mod-t", run: insertSubtotal, preventDefault: true },
+      { key: "Mod-l", run: insertLineRef, preventDefault: true },
       {
         key: "Ctrl-\\",
         run: (view) => {

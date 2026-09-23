@@ -366,7 +366,8 @@ body {
 .settings-open:focus-visible,
 .icon-btn:focus-visible,
 .sheet-del:focus-visible,
-.total-pill:focus-visible {
+.total-mode:focus-visible,
+.total-copy:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -917,9 +918,9 @@ body.quick-body {
   right: 24px;
   bottom: 20px;
   z-index: 10;
-  border: none;
+  display: flex;
+  align-items: center;
   border-radius: 999px;
-  padding: 8px 18px;
   font-family: var(--font);
   font-size: 14px;
   font-weight: 650;
@@ -929,6 +930,7 @@ body.quick-body {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
   cursor: pointer;
   transition: transform 0.12s ease;
+  overflow: hidden;
 }
 
 .total-pill:hover {
@@ -937,4 +939,28 @@ body.quick-body {
 
 .total-pill:active {
   transform: translateY(0);
+}
+
+.total-mode,
+.total-copy {
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 8px 6px;
+  cursor: pointer;
+}
+
+.total-mode {
+  padding-left: 16px;
+  padding-right: 4px;
+  opacity: 0.65;
+}
+
+.total-mode:hover {
+  opacity: 1;
+}
+
+.total-copy {
+  padding-right: 18px;
 }

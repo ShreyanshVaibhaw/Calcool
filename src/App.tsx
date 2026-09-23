@@ -5,9 +5,20 @@ import SettingsDialog from "./SettingsDialog";
 import { readTheme, saveTheme, type ThemeId } from "./theme";
 import { loadBook, saveBook, newSheetObj, sheetTitle, decodeImportedFile, downloadFile, encodeSlvr, type Book, type Sheet } from "./storage";
 import { sheetRows, toCSV, toHTML } from "./export";
+import type { ModeTotals } from "./engine/sheet";
 import "./App.css";
 
 const SIDEBAR_KEY = "calcool.sidebar";
+const TOTAL_MODE_KEY = "calcool.totalmode";
+
+const TOTAL_MODES = ["sum", "average", "count", "median"] as const;
+type TotalMode = (typeof TOTAL_MODES)[number];
+const MODE_SYM: Record<TotalMode, string> = { sum: "Σ", average: "avg", count: "#", median: "med" };
+
+function readTotalMode(): TotalMode {
+  const m = localStorage.getItem(TOTAL_MODE_KEY);
+  return (TOTAL_MODES as readonly string[]).includes(m ?? "") ? (m as TotalMode) : "sum";
+}
 
 function dateLabel(ts: number): string {
   const d = new Date(ts);
@@ -25,6 +36,8 @@ function App() {
   const settingsDialog = useRef<HTMLDialogElement>(null);
   const [book, setBook] = useState<Book | null>(null); // null until the store loads
   const [total, setTotal] = useState("");
+  const [modes, setModes] = useState<ModeTotals | null>(null);
+  const [totalMode, setTotalMode] = useState<TotalMode>(readTotalMode);
   const [copied, setCopied] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(SIDEBAR_KEY) === "1");
   const [filter, setFilter] = useState("");
@@ -59,7 +72,10 @@ function App() {
         host.current,
         active.text,
         active.id,
-        (s) => setTotal(s.totalFormatted),
+        (s) => {
+          setTotal(s.totalFormatted);
+          setModes(s.modes);
+        },
         (docId, text) =>
           setBook((prev) =>
             prev
@@ -380,8 +396,18 @@ function App() {
     </div>
   );
 
+  const shownTotal = (modes?.[totalMode] || total) ?? "";
+  const cycleMode = () => {
+    setTotalMode((m) => {
+      const next = TOTAL_MODES[(TOTAL_MODES.indexOf(m) + 1) % TOTAL_MODES.length];
+      localStorage.setItem(TOTAL_MODE_KEY, next);
+      return next;
+    });
+  };
+
   const copyTotal = () => {
-    navigator.clipboard.writeText(total).catch(() => {});
+    if (!shownTotal) return;
+    navigator.clipboard.writeText(shownTotal).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 700);
   };
@@ -461,10 +487,15 @@ function App() {
         </button>
       )}
       <div className="editor-wrap" ref={host} />
-      {total && (
-        <button className="total-pill" onClick={copyTotal} title="Click to copy">
-          {copied ? "copied" : total}
-        </button>
+      {shownTotal && (
+        <div className="total-pill">
+          <button className="total-mode" type="button" title={`Total mode: ${totalMode} — click to switch`} onClick={cycleMode}>
+            {MODE_SYM[totalMode]}
+          </button>
+          <button className="total-copy" type="button" onClick={copyTotal} title="Click to copy">
+            {copied ? "copied" : shownTotal}
+          </button>
+        </div>
       )}
       <SettingsDialog dialogRef={settingsDialog} theme={theme} onThemeChange={chooseTheme} onEngineChange={() => handle.current?.refresh()} />
     </div>
