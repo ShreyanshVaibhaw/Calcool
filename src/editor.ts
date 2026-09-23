@@ -561,12 +561,17 @@ const answers = ViewPlugin.fromClass(
           const sheet = view.state.field(sheetField);
           const rect = view.scrollDOM.getBoundingClientRect();
           const baseTop = view.documentTop - rect.top + view.scrollDOM.scrollTop;
-          const rows: Row[] = [];
+          // a wrapped logical line yields one block per visual row; the answer
+          // belongs to the last one so it never overlaps the wrapped text
+          const lastBlock = new Map<number, number>();
           for (const block of view.viewportLineBlocks) {
-            const lineNo = view.state.doc.lineAt(block.from).number;
+            lastBlock.set(view.state.doc.lineAt(block.from).number, block.top);
+          }
+          const rows: Row[] = [];
+          for (const [lineNo, top] of lastBlock) {
             const out = sheet.lines[lineNo - 1];
             if (!out || !out.formatted) continue;
-            rows.push({ top: baseTop + block.top, text: out.formatted, line: view.state.doc.lineAt(block.from).text, kind: out.kind, lineNo });
+            rows.push({ top: baseTop + top, text: out.formatted, line: view.state.doc.line(lineNo).text, kind: out.kind, lineNo });
           }
           return rows;
         },

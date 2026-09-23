@@ -1,0 +1,12 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`theme selection > keeps the shipped theme list stable 1`] = `
+[
+  "system",
+  "light",
+  "dark",
+  "nord",
+  "catppuccin",
+  "github-dark",
+]
+`;
