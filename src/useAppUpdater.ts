@@ -1,6 +1,6 @@
 import { isTauri } from "@tauri-apps/api/core";
 import type { Update } from "@tauri-apps/plugin-updater";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type UpdatePhase = "idle" | "checking" | "available" | "downloading" | "installing" | "current" | "error";
 
@@ -23,7 +23,17 @@ function readableError(error: unknown): string {
 
 export function useAppUpdater() {
   const [state, setState] = useState<UpdateState>(INITIAL_STATE);
+  const [version, setVersion] = useState("dev");
   const pendingUpdate = useRef<Update | null>(null);
+
+  // the running app version for the settings row (browser dev shows "dev")
+  useEffect(() => {
+    if (isTauri()) {
+      import("@tauri-apps/api/app")
+        .then((app) => app.getVersion().then(setVersion))
+        .catch(() => {});
+    }
+  }, []);
 
   const checkForUpdates = useCallback(async () => {
     if (!isTauri()) {
@@ -82,5 +92,5 @@ export function useAppUpdater() {
   }, []);
 
   const busy = state.phase === "checking" || state.phase === "downloading" || state.phase === "installing";
-  return { state, busy, checkForUpdates, installUpdate };
+  return { state, busy, version, checkForUpdates, installUpdate };
 }

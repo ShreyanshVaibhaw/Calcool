@@ -5,6 +5,7 @@
   "windows": ["main", "quick"],
   "permissions": [
     "core:default",
+    "core:app:allow-version",
     "opener:default",
     "process:default",
     "updater:default",

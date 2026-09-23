@@ -60,6 +60,13 @@ npm run tauri build  # release build; installers land in src-tauri/target/releas
 - Workdays and holidays: `December 24 2027 + 2 workdays` skips the observed Christmas, `workdays from April 12 to June 15`, `10 March to 17 March in workdays`, `workdays in June 2027`, `workdays left in 2026`, `work hours between two dates`, `55h in work days`, `$500/workday × 4 weeks`. Holiday rules are computed in-app (US federal, UK bank incl. Easter, India national), region picked from the OS locale
 - Timezones, DST-correct via the platform ICU (nothing shipped): `6pm Sydney in Chicago`, `2am PST to GMT`, `time in Tokyo`, `9am SFO to JFK`, `3pm GMT+8 to Paris`, `time difference between London and Tokyo`, ~200 cities/countries/abbreviations/airport codes
 
+## Release checklist (manual, needs WiX + NSIS on the build machine)
+
+- `npm run tauri build` produces MSI + NSIS in `src-tauri/target/release/bundle/`
+- Install over the previous version: sheets in `Documents\Calcool` survive, settings survive
+- Offline launch works; currency lines show the bundled fallback rates, no crash
+- Settings shows the running version and Check for updates finds the signed GitHub release
+
 ## Next (see SPEC.md for the full list)
 
 Everything in the SPEC roadmap is shipped, P0 through P3.

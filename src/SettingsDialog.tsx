@@ -13,7 +13,7 @@ interface SettingsDialogProps {
 }
 
 export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngineChange }: SettingsDialogProps) {
-  const { state, busy, checkForUpdates, installUpdate } = useAppUpdater();
+  const { state, busy, version, checkForUpdates, installUpdate } = useAppUpdater();
   const updateReady = state.phase === "available";
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [hotkeyNote, setHotkeyNote] = useState("");
@@ -218,6 +218,7 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
         <section className="update-panel" aria-labelledby="updates-title">
           <div className="update-copy">
             <h3 id="updates-title">App updates</h3>
+            <p>Calcool {version}</p>
             <p aria-live="polite">{state.message}</p>
           </div>
           {state.phase === "downloading" && state.progress !== undefined && (
