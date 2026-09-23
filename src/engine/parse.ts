@@ -1876,7 +1876,12 @@ function assembleDates(sig: Sig[]): void {
     t?.s === "num" && t.d.isInteger() && t.d.gte(1000) && t.d.lte(3000) ? t.d.toNumber() : null;
   const dayOf = (t: Sig | undefined): number | null =>
     t?.s === "num" && t.d.isInteger() && t.d.gte(1) && t.d.lte(31) ? t.d.toNumber() : null;
-  const curYear = fromEpochDay(todayEpoch()).y;
+  // lazily filled: most lines carry no month token, so most lines skip the Date read
+  let curYear = 0;
+  const yearNow = (): number => {
+    if (!curYear) curYear = fromEpochDay(todayEpoch()).y;
+    return curYear;
+  };
 
   for (let i = 0; i < sig.length; i++) {
     const t = sig[i];
@@ -1916,7 +1921,7 @@ function assembleDates(sig: Sig[]): void {
       if (d !== null) {
         let len = 2;
         let to = sig[i + 1].to;
-        let y = curYear;
+        let y = yearNow();
         let j = i + 2;
         if (sig[j]?.s === "comma") j++;
         const yy = yearOf(sig[j]);
@@ -1937,7 +1942,7 @@ function assembleDates(sig: Sig[]): void {
       if (d !== null && mo?.s === "month") {
         let len = 2;
         let to = mo.to;
-        let y = curYear;
+        let y = yearNow();
         let j = i + 2;
         if (sig[j]?.s === "comma") j++;
         const yy = yearOf(sig[j]);

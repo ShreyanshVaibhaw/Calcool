@@ -538,6 +538,8 @@ interface Row {
 const answers = ViewPlugin.fromClass(
   class {
     container: HTMLDivElement;
+    pool = new Map<number, HTMLDivElement>(); // lineNo -> live div, reused across keystrokes
+    rows = new Map<number, Row>(); // latest measured row per line for the handlers
 
     constructor(readonly view: EditorView) {
       this.container = document.createElement("div");
@@ -556,6 +558,7 @@ const answers = ViewPlugin.fromClass(
     }
 
     schedule() {
+      const self = this;
       this.view.requestMeasure({
         read: (view): Row[] => {
           const sheet = view.state.field(sheetField);
@@ -576,51 +579,75 @@ const answers = ViewPlugin.fromClass(
           return rows;
         },
         write: (rows: Row[]) => {
-          const c = this.container;
-          const view = this.view;
-          c.textContent = "";
+          self.rows.clear();
+          for (const r of rows) self.rows.set(r.lineNo, r);
+          const seen = new Set<number>();
           for (const r of rows) {
-            const el = document.createElement("div");
-            el.className = "ck-answer" + (r.kind === "aggregate" ? " ck-answer-total" : "") + (r.kind === "assign" ? " ck-answer-var" : "");
-            el.style.top = `${r.top}px`;
-            el.textContent = r.text;
-            el.title = "Click to copy · Shift+click copies the line · Alt+click copies plain · double-click to insert a reference · drag into a line";
-            el.draggable = true;
-            el.addEventListener("mousedown", (e) => e.preventDefault()); // keep editor focus
-            el.addEventListener("dragstart", (e) => {
-              e.dataTransfer?.setData("text/plain", `line${r.lineNo}`);
-              e.dataTransfer?.setData("text/sourceline", String(r.lineNo));
-            });
-            // dropping an answer here moves its line below this one (tokens renumber after)
-            el.addEventListener("dragover", (e) => e.preventDefault());
-            el.addEventListener("drop", (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const src = parseInt(e.dataTransfer?.getData("text/sourceline") ?? "", 10);
-              if (Number.isInteger(src)) moveLineTo(view, src, r.lineNo);
-            });
-            let copyTimer: ReturnType<typeof setTimeout> | undefined;
-            el.addEventListener("click", (e) => {
-              clearTimeout(copyTimer);
-              const { shiftKey, altKey } = e;
-              copyTimer = setTimeout(() => {
-                const text = shiftKey ? copyLineText(r.line, r.text) : altKey ? plainAnswer(r.text) : r.text;
-                navigator.clipboard.writeText(text).catch(() => {});
-                el.classList.add("ck-copied");
-                setTimeout(() => el.classList.remove("ck-copied"), 500);
-              }, 260);
-            });
-            el.addEventListener("dblclick", () => {
-              clearTimeout(copyTimer);
-              if (!insertRef(view, r.lineNo)) {
-                el.classList.add("ck-ref-denied");
-                setTimeout(() => el.classList.remove("ck-ref-denied"), 450);
-              }
-            });
-            c.appendChild(el);
+            seen.add(r.lineNo);
+            let el = self.pool.get(r.lineNo);
+            if (!el) {
+              el = self.makeAnswer(r.lineNo);
+              self.pool.set(r.lineNo, el);
+            }
+            // same visuals as a rebuild, but only touch the DOM when something changed
+            const cls = "ck-answer" + (r.kind === "aggregate" ? " ck-answer-total" : "") + (r.kind === "assign" ? " ck-answer-var" : "");
+            if (el.className !== cls) el.className = cls;
+            if (el.textContent !== r.text) el.textContent = r.text;
+            const top = `${r.top}px`;
+            if (el.style.top !== top) el.style.top = top;
+            self.container.appendChild(el); // re-appends in viewport order; moves, never rebuilds
+          }
+          for (const [lineNo, el] of self.pool) {
+            if (!seen.has(lineNo)) {
+              el.remove();
+              self.pool.delete(lineNo);
+            }
           }
         },
       });
+    }
+
+    // one div per line with listeners attached once; handlers read the live row
+    makeAnswer(lineNo: number): HTMLDivElement {
+      const self = this;
+      const el = document.createElement("div");
+      el.className = "ck-answer";
+      el.title = "Click to copy · Shift+click copies the line · Alt+click copies plain · double-click to insert a reference · drag into a line";
+      el.draggable = true;
+      el.addEventListener("mousedown", (e) => e.preventDefault()); // keep editor focus
+      el.addEventListener("dragstart", (e) => {
+        e.dataTransfer?.setData("text/plain", `line${lineNo}`);
+        e.dataTransfer?.setData("text/sourceline", String(lineNo));
+      });
+      // dropping an answer here moves its line below this one (tokens renumber after)
+      el.addEventListener("dragover", (e) => e.preventDefault());
+      el.addEventListener("drop", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const src = parseInt(e.dataTransfer?.getData("text/sourceline") ?? "", 10);
+        if (Number.isInteger(src)) moveLineTo(self.view, src, lineNo);
+      });
+      let copyTimer: ReturnType<typeof setTimeout> | undefined;
+      el.addEventListener("click", (e) => {
+        const r = self.rows.get(lineNo);
+        if (!r) return;
+        clearTimeout(copyTimer);
+        const { shiftKey, altKey } = e;
+        copyTimer = setTimeout(() => {
+          const text = shiftKey ? copyLineText(r.line, r.text) : altKey ? plainAnswer(r.text) : r.text;
+          navigator.clipboard.writeText(text).catch(() => {});
+          el.classList.add("ck-copied");
+          setTimeout(() => el.classList.remove("ck-copied"), 500);
+        }, 260);
+      });
+      el.addEventListener("dblclick", () => {
+        clearTimeout(copyTimer);
+        if (!insertRef(self.view, lineNo)) {
+          el.classList.add("ck-ref-denied");
+          setTimeout(() => el.classList.remove("ck-ref-denied"), 450);
+        }
+      });
+      return el;
     }
 
     destroy() {
