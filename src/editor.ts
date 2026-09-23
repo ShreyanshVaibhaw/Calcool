@@ -1,4 +1,4 @@
-import { EditorView, ViewPlugin, ViewUpdate, Decoration, DecorationSet, WidgetType, keymap, drawSelection, highlightActiveLine, showDialog } from "@codemirror/view";
+import { EditorView, ViewPlugin, ViewUpdate, Decoration, DecorationSet, WidgetType, keymap, drawSelection, highlightActiveLine, showDialog, placeholder } from "@codemirror/view";
 import { EditorState, StateField, StateEffect, RangeSetBuilder, MapMode, ChangeSpec, Transaction, Extension, EditorSelection } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { searchKeymap, highlightSelectionMatches, openSearchPanel, gotoLine, searchPanelOpen } from "@codemirror/search";
@@ -669,6 +669,7 @@ export function createEditor(
 
   const extensions = [
     history(),
+    placeholder("Type a calculation… answers appear on the right"),
     drawSelection(),
     highlightActiveLine(),
     EditorView.lineWrapping,

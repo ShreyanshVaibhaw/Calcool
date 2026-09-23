@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createEditor, EditorHandle } from "./editor";
 import { loadRates } from "./rates";
 import SettingsDialog from "./SettingsDialog";
+import ShortcutsDialog from "./ShortcutsDialog";
+import { SAMPLE_SHEETS } from "./samples";
 import { fontVars } from "./settings";
 import { readTheme, saveTheme, type ThemeId } from "./theme";
 import { loadBook, saveBook, newSheetObj, sheetTitle, decodeImportedFile, downloadFile, encodeSlvr, type Book, type Sheet } from "./storage";
@@ -35,6 +37,7 @@ function App() {
   const host = useRef<HTMLDivElement>(null);
   const handle = useRef<EditorHandle | null>(null);
   const settingsDialog = useRef<HTMLDialogElement>(null);
+  const shortcutsDialog = useRef<HTMLDialogElement>(null);
   const [book, setBook] = useState<Book | null>(null); // null until the store loads
   const [total, setTotal] = useState("");
   const [modes, setModes] = useState<ModeTotals | null>(null);
@@ -238,6 +241,24 @@ function App() {
       if (folder && !b.folders.some((f) => f.toLowerCase() === folder.toLowerCase())) b = { ...b, folders: [...b.folders, folder] };
       return { ...b, sheets: [...fresh, ...b.sheets], activeId: fresh[0].id };
     });
+    handle.current?.setDoc(fresh[0].text, fresh[0].id);
+    setFilter("");
+  };
+
+  // bundled sample sheets, skipped when a same-named sheet already exists
+  const addSamples = () => {
+    if (!book) return;
+    const stash = captureStash();
+    const fresh: Sheet[] = [];
+    for (const sm of SAMPLE_SHEETS) {
+      const known = (s: Sheet) => (s.name || sheetTitle(s.text)).toLowerCase() === sm.title.toLowerCase();
+      if (book.sheets.some(known)) continue;
+      const s = newSheetObj(sm.text);
+      s.name = sm.title;
+      fresh.push(s);
+    }
+    if (!fresh.length) return;
+    setBook((prev) => (prev ? { ...applyStash(prev, stash), sheets: [...fresh, ...prev.sheets], activeId: fresh[0].id } : prev));
     handle.current?.setDoc(fresh[0].text, fresh[0].id);
     setFilter("");
   };
@@ -459,6 +480,17 @@ function App() {
               <button className="io-btn" type="button" title="New folder" onClick={addFolder}>
                 + Folder
               </button>
+              <button className="io-btn" type="button" title="Add the household budget and trip conversion samples" onClick={addSamples}>
+                Samples
+              </button>
+              <button
+                className="io-btn"
+                type="button"
+                title="Keyboard shortcuts"
+                onClick={() => shortcutsDialog.current?.showModal()}
+              >
+                Shortcuts
+              </button>
               <input
                 ref={fileRef}
                 type="file"
@@ -512,6 +544,7 @@ function App() {
           setFontStyle(fontVars());
         }}
       />
+      <ShortcutsDialog dialogRef={shortcutsDialog} />
     </div>
   );
 }

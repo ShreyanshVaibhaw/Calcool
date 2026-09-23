@@ -35,38 +35,14 @@ interface IndexEntry {
 }
 
 export const DEFAULT_DOC = `# Welcome to Calcool
-Type calculations as plain sentences.
+Type calculations as plain sentences. Answers appear on the right.
 
-flights: $420 × 2
-hotel: $180 × 6 nights
 lunch was $18.50 + 20% tip
-shinkansen: ¥22,000 in USD
-total
-
-// variables update everything below them
-rent = $1,450
-rent × 12
-
-// units, conversions, percentages
 100 pounds in kg
-1 GiB in MB
-0xFF to decimal
-20 is what % of 160
-$25/hour × 14 hours
-
-// dates are just words too
+rent = $1,450
+rent * 12
 today + 3 weeks
-days until christmas
-June 10 + 3 weeks
-day of the week on January 24, 1984
-March 3 to May 30
-
-// clock times and timezones
-now + 3 hours 15 minutes
-9am to 5:30pm
-time in Tokyo
-6pm Sydney in Chicago
-time difference between London and Tokyo
+total
 `;
 
 export function sheetTitle(text: string): string {

@@ -69,6 +69,7 @@ Settings has an optional sync folder: every save mirrors each sheet there as a `
 - Date math, calendar-aware: `today + 3 weeks`, `April 1, 2019 - 3 months 5 days`, `Jan 31 2020 + 1 month` clamps to Feb 29, `days until christmas`, `next friday`, `3 March to 30 May` gives `2 months 3 weeks 6 days`, `weekday on March 9, 2024`, `days in February 2020`, `1978 to 2021`
 - Clock times: `now + 3 hours 15 minutes`, `4pm to 3am` gives `11 hours`, `noon + 90 minutes`, `3:45pm + 5`, `hours between 9am and 5:30pm`, `10:15 to decimal`
 - Workdays and holidays: `December 24 2027 + 2 workdays` skips the observed Christmas, `workdays from April 12 to June 15`, `10 March to 17 March in workdays`, `workdays in June 2027`, `workdays left in 2026`, `work hours between two dates`, `55h in work days`, `$500/workday × 4 weeks`. Holiday rules are computed in-app (US federal, UK bank incl. Easter, India national), region picked from the OS locale
+- First run opens a short welcome sheet; the sidebar Samples button adds a household budget and a trip conversions sheet, and Shortcuts lists every keyboard shortcut
 - Timezones, DST-correct via the platform ICU (nothing shipped): `6pm Sydney in Chicago`, `2am PST to GMT`, `time in Tokyo`, `9am SFO to JFK`, `3pm GMT+8 to Paris`, `time difference between London and Tokyo`, ~200 cities/countries/abbreviations/airport codes
 
 ## Release checklist (manual, needs WiX + NSIS on the build machine)

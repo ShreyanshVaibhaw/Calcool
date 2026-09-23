@@ -307,6 +307,7 @@ body {
 
 .sidebar-io {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 8px;
 }
@@ -336,6 +337,31 @@ body {
 .io-btn:hover {
   color: var(--fg);
   border-color: var(--accent);
+}
+
+/* empty-sheet placeholder and the shortcuts table */
+.cm-placeholder {
+  color: var(--prose);
+  opacity: 0.55;
+}
+
+.shortcuts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.shortcuts-table th,
+.shortcuts-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 4px 8px 4px 0;
+}
+
+.shortcuts-table th {
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--fg);
 }
 
 .sidebar-footer {
