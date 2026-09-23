@@ -8,6 +8,7 @@ import { fontVars } from "./settings";
 import { readTheme, saveTheme, type ThemeId } from "./theme";
 import { loadBook, saveBook, newSheetObj, sheetTitle, decodeImportedFile, downloadFile, encodeSlvr, type Book, type Sheet } from "./storage";
 import { sheetRows, toCSV, toHTML } from "./export";
+import { s } from "./strings";
 import type { ModeTotals } from "./engine/sheet";
 import "./App.css";
 
@@ -29,7 +30,7 @@ function dateLabel(ts: number): string {
   const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diff = (day(now) - day(d)) / 86400000;
   if (diff === 0) return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  if (diff === 1) return "Yesterday";
+  if (diff === 1) return s.app.yesterday;
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
@@ -144,7 +145,7 @@ function App() {
     const sheet = book.sheets.find((s) => s.id === id);
     if (!sheet) return;
     const currentText = id === book.activeId ? (handle.current?.getDoc() ?? sheet.text) : sheet.text;
-    if (currentText.trim() && !window.confirm(`Delete "${sheet.name || sheetTitle(currentText)}"?`)) return;
+    if (currentText.trim() && !window.confirm(s.app.deleteSheetConfirm(sheet.name || sheetTitle(currentText)))) return;
 
     const stash = captureStash();
     const rest = book.sheets.filter((s) => s.id !== id);
@@ -179,7 +180,7 @@ function App() {
   };
 
   const addFolder = () => {
-    const name = cleanFolderName(window.prompt("Folder name") ?? "");
+    const name = cleanFolderName(window.prompt(s.app.folderNamePrompt) ?? "");
     if (!name) return;
     setBook((prev) => (prev && !prev.folders.some((f) => f.toLowerCase() === name.toLowerCase()) ? { ...prev, folders: [...prev.folders, name] } : prev));
   };
@@ -199,7 +200,7 @@ function App() {
   };
 
   const deleteFolder = (name: string) => {
-    if (!window.confirm(`Delete folder "${name}"? Its sheets move to Inbox.`)) return;
+    if (!window.confirm(s.app.deleteFolderConfirm(name))) return;
     setBook((prev) =>
       prev
         ? { ...prev, folders: prev.folders.filter((f) => f !== name), sheets: prev.sheets.map((s) => (s.folder === name ? { ...s, folder: undefined } : s)) }
@@ -308,48 +309,48 @@ function App() {
   const inboxSheets = grouped && book ? visibleSheets.filter((s) => s.folder === undefined || !book.folders.includes(s.folder)) : [];
   const sheetsIn = (folder: string): Sheet[] => (grouped && book ? visibleSheets.filter((s) => s.folder === folder) : []);
 
-  const renderSheet = (s: Sheet) => (
+  const renderSheet = (sheet: Sheet) => (
     <div
-      key={s.id}
-      className={"sheet-item" + (s.id === book?.activeId ? " active" : "")}
+      key={sheet.id}
+      className={"sheet-item" + (sheet.id === book?.activeId ? " active" : "")}
       draggable
-      onDragStart={(e) => e.dataTransfer.setData("text/sheet-id", s.id)}
-      onClick={() => selectSheet(s.id)}
+      onDragStart={(e) => e.dataTransfer.setData("text/sheet-id", sheet.id)}
+      onClick={() => selectSheet(sheet.id)}
     >
-      {renamingId === s.id ? (
+      {renamingId === sheet.id ? (
         <input
           className="sheet-rename"
-          defaultValue={s.name ?? ""}
-          placeholder={sheetTitle(s.text)}
+          defaultValue={sheet.name ?? ""}
+          placeholder={sheetTitle(sheet.text)}
           autoFocus
           onFocus={(e) => e.currentTarget.select()}
           onClick={(e) => e.stopPropagation()}
-          onBlur={(e) => renameSheet(s.id, e.currentTarget.value)}
+          onBlur={(e) => renameSheet(sheet.id, e.currentTarget.value)}
           onKeyDown={(e) => {
             // Escape restores the old name so the blur commit is a no-op
-            if (e.key === "Escape") e.currentTarget.value = s.name ?? "";
+            if (e.key === "Escape") e.currentTarget.value = sheet.name ?? "";
             if (e.key === "Enter" || e.key === "Escape") e.currentTarget.blur();
           }}
         />
       ) : (
-        <div
-          className="sheet-title"
-          title="Double-click to rename"
-          onDoubleClick={(e) => {
-            e.stopPropagation();
-            setRenamingId(s.id);
-          }}
-        >
-          {s.name || sheetTitle(s.id === book?.activeId ? (handle.current?.getDoc() ?? s.text) : s.text)}
+          <div
+            className="sheet-title"
+            title={s.app.doubleClickToRename}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              setRenamingId(sheet.id);
+            }}
+          >
+          {sheet.name || sheetTitle(sheet.id === book?.activeId ? (handle.current?.getDoc() ?? sheet.text) : sheet.text)}
         </div>
       )}
-      <div className="sheet-meta">{dateLabel(s.modified)}</div>
+      <div className="sheet-meta">{dateLabel(sheet.modified)}</div>
       <button
         className="sheet-del"
-        title="Delete sheet"
+        title={s.app.deleteSheet}
         onClick={(e) => {
           e.stopPropagation();
-          deleteSheet(s.id);
+          deleteSheet(sheet.id);
         }}
       >
         ×
@@ -401,7 +402,7 @@ function App() {
       ) : (
         <div
           className="folder-title"
-          title="Double-click to rename"
+          title={s.app.doubleClickToRename}
           onDoubleClick={(e) => {
             e.stopPropagation();
             setRenamingFolder(f);
@@ -410,10 +411,10 @@ function App() {
           {f} <span className="folder-count">{n}</span>
         </div>
       )}
-      <button className="icon-btn" title={`New sheet in ${f}`} onClick={() => addSheet(f)}>
+      <button className="icon-btn" title={s.app.newSheetIn(f)} onClick={() => addSheet(f)}>
         +
       </button>
-      <button className="icon-btn" title={`Delete folder ${f}`} onClick={() => deleteFolder(f)}>
+      <button className="icon-btn" title={s.app.deleteFolder(f)} onClick={() => deleteFolder(f)}>
         ×
       </button>
     </div>
@@ -440,11 +441,11 @@ function App() {
       {!collapsed && (
         <aside className="sidebar">
           <div className="sidebar-top">
-            <button className="icon-btn" title="Hide sidebar (Ctrl+\)" onClick={() => setCollapsed(true)}>
+            <button className="icon-btn" title={s.app.hideSidebar} onClick={() => setCollapsed(true)}>
               «
             </button>
-            <input className="sheet-search" placeholder="Search sheets" value={filter} onChange={(e) => setFilter(e.target.value)} />
-            <button className="icon-btn" title="New sheet (Ctrl+N)" onClick={() => addSheet()}>
+            <input className="sheet-search" placeholder={s.app.searchSheets} value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <button className="icon-btn" title={s.app.newSheet} onClick={() => addSheet()}>
               +
             </button>
           </div>
@@ -453,43 +454,43 @@ function App() {
             {grouped &&
               folderSection(
                 null,
-                hasFolders ? <div className="folder-header"><div className="folder-title">Inbox</div></div> : null,
+                hasFolders ? <div className="folder-header"><div className="folder-title">{s.app.inbox}</div></div> : null,
                 inboxSheets,
               )}
             {grouped && book?.folders.map((f) => folderSection(f, folderHeader(f, sheetsIn(f).length), sheetsIn(f)))}
-            {visibleSheets.length === 0 && <div className="sheet-empty">{filter ? "No matching sheets" : "No sheets yet"}</div>}
+            {visibleSheets.length === 0 && <div className="sheet-empty">{filter ? s.app.noMatchingSheets : s.app.noSheetsYet}</div>}
           </div>
           <div className="sidebar-footer">
             <div className="sidebar-io">
-              <select value={exportFmt} onChange={(e) => setExportFmt(e.target.value as typeof exportFmt)} title="Export format">
+              <select value={exportFmt} onChange={(e) => setExportFmt(e.target.value as typeof exportFmt)} title={s.app.exportFormat}>
                 <option value="calcool">.calcool</option>
                 <option value="txt">.txt</option>
                 <option value="slvr">.slvr</option>
                 <option value="csv">.csv</option>
                 <option value="html">.html</option>
               </select>
-              <button className="io-btn" type="button" title="Export the active sheet" onClick={exportActive}>
-                Export
+              <button className="io-btn" type="button" title={s.app.exportActive} onClick={exportActive}>
+                {s.app.exportButton}
               </button>
-              <button className="io-btn" type="button" title="Print the active sheet (PDF via your printer)" onClick={() => window.print()}>
-                Print
+              <button className="io-btn" type="button" title={s.app.printTitle} onClick={() => window.print()}>
+                {s.app.printButton}
               </button>
-              <button className="io-btn" type="button" title="Import .txt, .calcool, .slvr files" onClick={() => fileRef.current?.click()}>
-                Import
+              <button className="io-btn" type="button" title={s.app.importTitle} onClick={() => fileRef.current?.click()}>
+                {s.app.importButton}
               </button>
-              <button className="io-btn" type="button" title="New folder" onClick={addFolder}>
-                + Folder
+              <button className="io-btn" type="button" title={s.app.newFolderTitle} onClick={addFolder}>
+                {s.app.newFolder}
               </button>
-              <button className="io-btn" type="button" title="Add the household budget and trip conversion samples" onClick={addSamples}>
-                Samples
+              <button className="io-btn" type="button" title={s.app.samplesTitle} onClick={addSamples}>
+                {s.app.samplesButton}
               </button>
               <button
                 className="io-btn"
                 type="button"
-                title="Keyboard shortcuts"
+                title={s.app.shortcutsTitle}
                 onClick={() => shortcutsDialog.current?.showModal()}
               >
-                Shortcuts
+                {s.app.shortcutsButton}
               </button>
               <input
                 ref={fileRef}
@@ -506,17 +507,17 @@ function App() {
             <button
               className="settings-open"
               type="button"
-              title="Appearance & updates (Ctrl+,)"
+              title={s.app.settingsTitle}
               onClick={() => settingsDialog.current?.showModal()}
             >
               <span aria-hidden="true">⚙</span>
-              <span>Appearance & updates</span>
+              <span>{s.app.settingsButton}</span>
             </button>
           </div>
         </aside>
       )}
       {collapsed && (
-        <button className="sidebar-open icon-btn" title="Show sheets (Ctrl+\)" onClick={() => setCollapsed(false)}>
+        <button className="sidebar-open icon-btn" title={s.app.showSidebar} onClick={() => setCollapsed(false)}>
           ≡
         </button>
       )}
@@ -527,11 +528,11 @@ function App() {
       />
       {shownTotal && (
         <div className="total-pill">
-          <button className="total-mode" type="button" title={`Total mode: ${totalMode} — click to switch`} onClick={cycleMode}>
+          <button className="total-mode" type="button" title={s.app.totalModeTitle(totalMode)} onClick={cycleMode}>
             {MODE_SYM[totalMode]}
           </button>
-          <button className="total-copy" type="button" onClick={copyTotal} title="Click to copy">
-            {copied ? "copied" : shownTotal}
+          <button className="total-copy" type="button" onClick={copyTotal} title={s.app.copyTotalTitle}>
+            {copied ? s.app.copied : shownTotal}
           </button>
         </div>
       )}

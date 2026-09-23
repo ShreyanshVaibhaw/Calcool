@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { THEME_OPTIONS, type ThemeId } from "./theme";
 import { useAppUpdater } from "./useAppUpdater";
 import { applySettings, FONT_CHOICES, HOTKEY_CHOICES, loadSettings, saveSettings, type Settings } from "./settings";
+import { s } from "./strings";
 import { canOpenBookFolder, openBookFolder } from "./storage";
 
 interface SettingsDialogProps {
@@ -29,8 +30,8 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
   const chooseHotkey = (accel: string) => {
     update({ hotkey: accel });
     invoke<string | null>("set_hotkey", { accel })
-      .then((got) => setHotkeyNote(got ? `Active: ${got}` : "No hotkey could be registered"))
-      .catch(() => setHotkeyNote("Applies in the installed app"));
+      .then((got) => setHotkeyNote(got ? s.settings.hotkeyActive(got) : s.settings.hotkeyNone))
+      .catch(() => setHotkeyNote(s.settings.hotkeyInstalledOnly));
   };
 
   return (
@@ -45,16 +46,16 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
       <div className="settings-card">
         <header className="settings-header">
           <div>
-            <h2 id="settings-title">Appearance & updates</h2>
-            <p>Personalize Calcool and keep it current.</p>
+            <h2 id="settings-title">{s.settings.title}</h2>
+            <p>{s.settings.subtitle}</p>
           </div>
-          <button className="settings-close" type="button" aria-label="Close settings" onClick={() => dialogRef.current?.close()}>
+          <button className="settings-close" type="button" aria-label={s.settings.close} onClick={() => dialogRef.current?.close()}>
             ×
           </button>
         </header>
 
         <fieldset className="theme-picker">
-          <legend>Theme</legend>
+          <legend>{s.settings.theme}</legend>
           <div className="theme-grid">
             {THEME_OPTIONS.map((option) => (
               <label className={`theme-option${theme === option.id ? " selected" : ""}`} key={option.id}>
@@ -79,18 +80,18 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
         </fieldset>
 
         <section className="calc-settings" aria-labelledby="calc-title">
-          <h3 id="calc-title">Calculation</h3>
+          <h3 id="calc-title">{s.settings.calculation}</h3>
           <div className="setting-row">
-            <label htmlFor="set-region">Workday holidays</label>
+            <label htmlFor="set-region">{s.settings.workdayHolidays}</label>
             <select id="set-region" value={settings.region} onChange={(e) => update({ region: e.target.value as Settings["region"] })}>
-              <option value="auto">Auto (OS locale)</option>
-              <option value="US">United States</option>
-              <option value="UK">United Kingdom</option>
-              <option value="IN">India</option>
+              <option value="auto">{s.settings.regionAuto}</option>
+              <option value="US">{s.settings.regionUS}</option>
+              <option value="UK">{s.settings.regionUK}</option>
+              <option value="IN">{s.settings.regionIN}</option>
             </select>
           </div>
           <div className="setting-row">
-            <label htmlFor="set-hours">Hours per workday</label>
+            <label htmlFor="set-hours">{s.settings.hoursPerWorkday}</label>
             <input
               id="set-hours"
               type="number"
@@ -104,27 +105,27 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
             />
           </div>
           <div className="setting-row">
-            <label htmlFor="set-cup">Cup size</label>
+            <label htmlFor="set-cup">{s.settings.cupSize}</label>
             <select id="set-cup" value={settings.cup ?? "us"} onChange={(e) => update({ cup: e.target.value as Settings["cup"] })}>
-              <option value="us">US (236.6 mL)</option>
-              <option value="metric">Metric (250 mL)</option>
-              <option value="imperial">Imperial (284.1 mL)</option>
+              <option value="us">{s.settings.cupUS}</option>
+              <option value="metric">{s.settings.cupMetric}</option>
+              <option value="imperial">{s.settings.cupImperial}</option>
             </select>
           </div>
           <div className="setting-row">
-            <label htmlFor="set-numregion">Number format</label>
+            <label htmlFor="set-numregion">{s.settings.numberFormat}</label>
             <select
               id="set-numregion"
               value={settings.numRegion ?? "en"}
               onChange={(e) => update({ numRegion: e.target.value as Settings["numRegion"] })}
             >
-              <option value="en">1,000.50</option>
-              <option value="de">1.000,50</option>
-              <option value="fr">1 000,50</option>
+              <option value="en">{s.settings.numRegionEn}</option>
+              <option value="de">{s.settings.numRegionDe}</option>
+              <option value="fr">{s.settings.numRegionFr}</option>
             </select>
           </div>
           <div className="setting-row">
-            <label htmlFor="set-precision">Decimals</label>
+            <label htmlFor="set-precision">{s.settings.decimals}</label>
             <input
               id="set-precision"
               type="number"
@@ -138,7 +139,7 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
             />
           </div>
           <div className="setting-row">
-            <label htmlFor="set-fontsize">Font size</label>
+            <label htmlFor="set-fontsize">{s.settings.fontSize}</label>
             <input
               id="set-fontsize"
               type="number"
@@ -152,7 +153,7 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
             />
           </div>
           <div className="setting-row">
-            <label htmlFor="set-fontfamily">Font</label>
+            <label htmlFor="set-fontfamily">{s.settings.fontChoice}</label>
             <select
               id="set-fontfamily"
               value={settings.fontFamily ?? ""}
@@ -166,17 +167,17 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
             </select>
           </div>
           <div className="setting-row">
-            <label htmlFor="set-taxname">Sales-tax word</label>
+            <label htmlFor="set-taxname">{s.settings.taxWord}</label>
             <input
               id="set-taxname"
               type="text"
-              placeholder="VAT"
+              placeholder={s.settings.taxWordPlaceholder}
               value={settings.taxName}
               onChange={(e) => update({ taxName: e.target.value.trim().split(/\s+/)[0] ?? "" })}
             />
           </div>
           <div className="setting-row">
-            <label htmlFor="set-taxrate">Sales-tax rate %</label>
+            <label htmlFor="set-taxrate">{s.settings.taxRate}</label>
             <input
               id="set-taxrate"
               type="number"
@@ -190,13 +191,11 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
               }}
             />
           </div>
-          <p className="setting-hint">
-            {`"$300 + ${settings.taxName || "VAT"}", "${settings.taxName || "VAT"} on $300", and "- ${settings.taxName || "VAT"}" divides included tax back out.`}
-          </p>
+          <p className="setting-hint">{s.settings.taxHint(settings.taxName || s.settings.taxWordPlaceholder)}</p>
           <div className="setting-row">
-            <label htmlFor="set-hotkey">Quick popup hotkey</label>
+            <label htmlFor="set-hotkey">{s.settings.hotkey}</label>
             <select id="set-hotkey" value={settings.hotkey} onChange={(e) => chooseHotkey(e.target.value)}>
-              <option value="">Auto (first available)</option>
+              <option value="">{s.settings.hotkeyAuto}</option>
               {HOTKEY_CHOICES.map((h) => (
                 <option key={h} value={h}>
                   {h}
@@ -207,37 +206,35 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
           {hotkeyNote && <p className="setting-hint">{hotkeyNote}</p>}
           {canOpenBookFolder && (
             <div className="setting-row">
-              <label>Sheets live in Documents\Calcool</label>
+              <label>{s.settings.sheetsLocation}</label>
               <button className="update-button" type="button" onClick={() => openBookFolder()}>
-                Open sheets folder
+                {s.settings.openSheetsFolder}
               </button>
             </div>
           )}
           {canOpenBookFolder && (
             <div className="setting-row">
-              <label htmlFor="set-sync">Sync folder (optional)</label>
+              <label htmlFor="set-sync">{s.settings.syncFolder}</label>
               <input
                 id="set-sync"
                 type="text"
-                placeholder="e.g. C:\Users\me\OneDrive\Calcool"
+                placeholder={s.settings.syncPlaceholder}
                 value={settings.syncFolder ?? ""}
                 onChange={(e) => update({ syncFolder: e.target.value })}
               />
             </div>
           )}
-          {canOpenBookFolder && !!settings.syncFolder?.trim() && (
-            <p className="setting-hint">Each save mirrors every sheet there as a text file. Last write wins; Documents\Calcool stays the source of truth.</p>
-          )}
+          {canOpenBookFolder && !!settings.syncFolder?.trim() && <p className="setting-hint">{s.settings.syncHint}</p>}
         </section>
 
         <section className="update-panel" aria-labelledby="updates-title">
           <div className="update-copy">
-            <h3 id="updates-title">App updates</h3>
-            <p>Calcool {version}</p>
+            <h3 id="updates-title">{s.settings.updatesTitle}</h3>
+            <p>{s.settings.appVersion(version)}</p>
             <p aria-live="polite">{state.message}</p>
           </div>
           {state.phase === "downloading" && state.progress !== undefined && (
-            <progress className="update-progress" max="100" value={state.progress} aria-label="Update download progress" />
+            <progress className="update-progress" max="100" value={state.progress} aria-label={s.settings.updateProgress} />
           )}
           <button
             className="update-button"
@@ -246,16 +243,16 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
             onClick={updateReady ? installUpdate : checkForUpdates}
           >
             {state.phase === "checking"
-              ? "Checking..."
+              ? s.settings.checking
               : state.phase === "downloading"
                 ? state.progress === undefined
-                  ? "Downloading..."
-                  : `Downloading ${state.progress}%`
+                  ? s.settings.downloading
+                  : s.settings.downloadingPct(state.progress)
                 : state.phase === "installing"
-                  ? "Installing..."
+                  ? s.settings.installing
                   : updateReady
-                    ? `Install ${state.version}`
-                    : "Check for updates"}
+                    ? s.settings.installVersion(state.version ?? "")
+                    : s.settings.checkUpdates}
           </button>
         </section>
       </div>

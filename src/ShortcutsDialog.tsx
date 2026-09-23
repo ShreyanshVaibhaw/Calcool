@@ -1,55 +1,8 @@
 import type { RefObject } from "react";
+import { s } from "./strings";
 
-// Every keyboard shortcut in the app, grouped. Keep in sync with editor.ts and App.tsx.
-const GROUPS: { title: string; rows: [string, string][] }[] = [
-  {
-    title: "Find and navigate",
-    rows: [
-      ["Ctrl+F", "Find in this sheet"],
-      ["Ctrl+H", "Find and replace"],
-      ["Ctrl+G", "Go to line"],
-      ["Esc", "Close the find panel or dialog"],
-    ],
-  },
-  {
-    title: "Edit lines",
-    rows: [
-      ["Ctrl+D", "Duplicate the selected lines"],
-      ["Ctrl+/", "Comment the selected lines"],
-      ["Ctrl+T", "Insert a total line below"],
-      ["Ctrl+Space", "Autocomplete a variable or unit"],
-      ["Alt+drag / Alt+scroll", "Scrub the number under the cursor"],
-      ["Ctrl+Z / Ctrl+Y", "Undo / redo (one drag is one undo)"],
-    ],
-  },
-  {
-    title: "Variables and references",
-    rows: [
-      ["F2 or Ctrl+R", "Rename the variable under the cursor everywhere"],
-      ["Ctrl+L", "Insert a live reference to a line number"],
-      ["Ctrl+\\", "Insert a reference to the nearest answer above"],
-      ["Double-click an answer", "Insert a reference to it (drag works too)"],
-      ["Type an operator on an empty line", "References the previous answer"],
-    ],
-  },
-  {
-    title: "Sheets and app",
-    rows: [
-      ["Ctrl+N", "New sheet"],
-      ["Ctrl+\\", "Show or hide the sheet sidebar"],
-      ["Ctrl+,", "Open settings"],
-      ["Double-click a sheet title", "Rename it (empty reverts to auto)"],
-    ],
-  },
-  {
-    title: "Quick popup",
-    rows: [
-      ["Alt+Space", "Open the quick calculator (falls back when a launcher owns it)"],
-      ["Enter", "Copy the answer and close"],
-      ["Esc", "Close without copying"],
-    ],
-  },
-];
+// Every keyboard shortcut in the app, grouped. Group copy lives in strings.ts;
+// keep the key bindings in sync with editor.ts and App.tsx.
 
 interface ShortcutsDialogProps {
   dialogRef: RefObject<HTMLDialogElement | null>;
@@ -68,14 +21,14 @@ export default function ShortcutsDialog({ dialogRef }: ShortcutsDialogProps) {
       <div className="settings-card">
         <header className="settings-header">
           <div>
-            <h2 id="shortcuts-title">Keyboard shortcuts</h2>
-            <p>Every shortcut in Calcool, in one place.</p>
+            <h2 id="shortcuts-title">{s.shortcuts.title}</h2>
+            <p>{s.shortcuts.subtitle}</p>
           </div>
-          <button className="settings-close" type="button" aria-label="Close shortcuts" onClick={() => dialogRef.current?.close()}>
+          <button className="settings-close" type="button" aria-label={s.shortcuts.close} onClick={() => dialogRef.current?.close()}>
             ×
           </button>
         </header>
-        {GROUPS.map((g) => (
+        {s.shortcuts.groups.map((g) => (
           <section className="calc-settings" key={g.title} aria-label={g.title}>
             <h3>{g.title}</h3>
             <table className="shortcuts-table">

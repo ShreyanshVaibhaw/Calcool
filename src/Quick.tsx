@@ -4,6 +4,7 @@ import { convertValue } from "./engine/evaluate";
 import { formatValue } from "./engine/format";
 import { unitById } from "./engine/units";
 import { loadRates } from "./rates";
+import { s } from "./strings";
 import "./App.css";
 
 // QuickSoulver-style auto conversion for bare single entries: "21 miles" answers in km
@@ -77,14 +78,14 @@ export default function Quick() {
         ref={inputRef}
         className="quick-in"
         autoFocus
-        placeholder="Type a calculation…"
+        placeholder={s.quick.placeholder}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKey}
         spellCheck={false}
       />
       {answer && <div className="quick-ans">{answer}</div>}
-      {answer && <div className="quick-hint">↵ copies</div>}
+      {answer && <div className="quick-hint">{s.quick.copiesHint}</div>}
     </div>
   );
 }

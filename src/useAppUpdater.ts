@@ -1,6 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { s } from "./strings";
 
 export type UpdatePhase = "idle" | "checking" | "available" | "downloading" | "installing" | "current" | "error";
 
@@ -13,7 +14,7 @@ export interface UpdateState {
 
 const INITIAL_STATE: UpdateState = {
   phase: "idle",
-  message: "Check GitHub for a newer signed release.",
+  message: s.updater.idle,
 };
 
 function readableError(error: unknown): string {
@@ -37,11 +38,11 @@ export function useAppUpdater() {
 
   const checkForUpdates = useCallback(async () => {
     if (!isTauri()) {
-      setState({ phase: "error", message: "Update checks are available in the installed app." });
+      setState({ phase: "error", message: s.updater.browserOnly });
       return;
     }
 
-    setState({ phase: "checking", message: "Checking GitHub releases..." });
+    setState({ phase: "checking", message: s.updater.checking });
     try {
       if (pendingUpdate.current) await pendingUpdate.current.close();
       const { check } = await import("@tauri-apps/plugin-updater");
@@ -49,17 +50,17 @@ export function useAppUpdater() {
       pendingUpdate.current = update;
 
       if (!update) {
-        setState({ phase: "current", message: "Calcool is up to date." });
+        setState({ phase: "current", message: s.updater.current });
         return;
       }
 
       setState({
         phase: "available",
         version: update.version,
-        message: update.body?.trim() || `Calcool ${update.version} is ready to install.`,
+        message: s.updater.ready(update.version, update.body),
       });
     } catch (error) {
-      setState({ phase: "error", message: `Could not check for updates. ${readableError(error)}` });
+      setState({ phase: "error", message: s.updater.checkFailed(readableError(error)) });
     }
   }, []);
 
@@ -69,7 +70,7 @@ export function useAppUpdater() {
 
     let downloaded = 0;
     let total: number | undefined;
-    setState({ phase: "downloading", version: update.version, message: `Downloading Calcool ${update.version}...`, progress: 0 });
+    setState({ phase: "downloading", version: update.version, message: s.updater.downloading(update.version), progress: 0 });
 
     try {
       await update.downloadAndInstall((event) => {
@@ -78,16 +79,16 @@ export function useAppUpdater() {
         } else if (event.event === "Progress") {
           downloaded += event.data.chunkLength;
           const progress = total ? Math.min(100, Math.round((downloaded / total) * 100)) : undefined;
-          setState({ phase: "downloading", version: update.version, message: `Downloading Calcool ${update.version}...`, progress });
+          setState({ phase: "downloading", version: update.version, message: s.updater.downloading(update.version), progress });
         } else {
-          setState({ phase: "installing", version: update.version, message: "Installing update and restarting...", progress: 100 });
+          setState({ phase: "installing", version: update.version, message: s.updater.installing, progress: 100 });
         }
       });
 
       const { relaunch } = await import("@tauri-apps/plugin-process");
       await relaunch();
     } catch (error) {
-      setState({ phase: "error", version: update.version, message: `Update failed. ${readableError(error)}` });
+      setState({ phase: "error", version: update.version, message: s.updater.installFailed(readableError(error)) });
     }
   }, []);
 
