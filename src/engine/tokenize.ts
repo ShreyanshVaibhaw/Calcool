@@ -8,6 +8,25 @@ export type RawTok =
   | { t: "tag"; tag: string; from: number; to: number; att: boolean }
   | { t: "lp" | "rp" | "comma"; from: number; to: number };
 
+// Accept every region style regardless of setting: with both marks present the
+// last one wins as decimal ("1,000.50" and "1.000,50" both read 1000.50); a lone
+// comma with other than 3 trailing digits reads decimal ("1,5" is 1.5, while
+// "1,000" and "1,000,000" stay grouped).
+export function parseNumericLiteral(literal: string): Decimal {
+  const m = /^(.*?)([eE][+-]?\d+)?$/.exec(literal)!;
+  let mant = m[1].replace(/_/g, "");
+  const exp = m[2] ?? "";
+  const lastDot = mant.lastIndexOf(".");
+  const lastComma = mant.lastIndexOf(",");
+  if (lastDot !== -1 && lastComma !== -1) {
+    mant = lastComma > lastDot ? mant.replace(/\./g, "").replace(",", ".") : mant.replace(/,/g, "");
+  } else if (lastComma !== -1) {
+    const commas = mant.split(",").length - 1;
+    mant = commas > 1 || /,\d{3}$/.test(mant) ? mant.replace(/,/g, "") : mant.replace(",", ".");
+  }
+  return new Decimal(mant + exp);
+}
+
 const CUR_CHARS = "$€£¥₹₽₩฿₺";
 const isDigit = (c: string) => c >= "0" && c <= "9";
 const isWordStart = (c: string) => /[A-Za-z_°µπ²³]/.test(c);
@@ -41,7 +60,6 @@ export function tokenize(line: string): RawTok[] {
     if (isDigit(c) || (c === "." && isDigit(line[i + 1] ?? ""))) {
       const from = i;
       let base: number | undefined;
-      let raw = "";
 
       if (c === "0" && "xXbBoO".includes(line[i + 1] ?? "") && /[0-9a-fA-F]/.test(line[i + 2] ?? "")) {
         const kind = line[i + 1].toLowerCase();
@@ -61,29 +79,20 @@ export function tokenize(line: string): RawTok[] {
       while (i < line.length) {
         const ch = line[i];
         if (isDigit(ch)) {
-          raw += ch;
           i++;
         } else if ((ch === "," || ch === "_") && isDigit(line[i + 1] ?? "")) {
-          i++; // grouping separator
+          i++; // grouping separator (reinterpreted below)
         } else if (ch === "." && !seenDot && isDigit(line[i + 1] ?? "")) {
           seenDot = true;
-          raw += ".";
           i++;
         } else if ((ch === "e" || ch === "E") && (isDigit(line[i + 1] ?? "") || ("+-".includes(line[i + 1] ?? "") && isDigit(line[i + 2] ?? "")))) {
-          raw += "e";
           i++;
-          if ("+-".includes(line[i])) {
-            raw += line[i];
-            i++;
-          }
-          while (i < line.length && isDigit(line[i])) {
-            raw += line[i];
-            i++;
-          }
+          if ("+-".includes(line[i])) i++;
+          while (i < line.length && isDigit(line[i])) i++;
           break;
         } else break;
       }
-      push({ t: "num", d: new Decimal(raw), from, to: i, att: lastEnd === from });
+      push({ t: "num", d: parseNumericLiteral(line.slice(from, i)), from, to: i, att: lastEnd === from });
       continue;
     }
 

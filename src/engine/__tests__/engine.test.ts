@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { evaluateSheet, renameVariable } from "../sheet";
-import { formatValue } from "../format";
+import { formatValue, setNumFormat, setPrecision } from "../format";
 import { todayEpoch, nearestWeekday, toEpochDay, isoWeek } from "../dates";
 import { setWorkdayConfig } from "../workdays";
 import { setTaxConfig } from "../tax";
@@ -310,6 +310,12 @@ const GOLDENS: [string, string][] = [
   ["my 5 km morning run in 25 min", "05:00/km"],
   ["26.2 miles in 4 hours", "09:10/mi"],
 
+  // 2.6 every region parses the same (displayed here in the default region)
+  ["1,000.50", "1,000.5"],
+  ["1.000,50", "1,000.5"],
+  ["1 000,50", "1,000.5"],
+  ["1,5 + 1", "2.5"],
+
   // 1.9 timestamps, timespans, ISO
   ["April 1, 2019 to timestamp", "1,554,076,800"],
   ["1559740303 to date", "5 June 2019"],
@@ -443,6 +449,30 @@ describe("cup system", () => {
       expect(line("1 cup in ml")).toBe("284.13 mL");
     } finally {
       setCupSystem("us");
+    }
+  });
+});
+
+describe("number region and precision", () => {
+  test("answers render in the configured region", () => {
+    try {
+      setNumFormat("de");
+      expect(line("1234.5 + 0")).toBe("1.234,5");
+      expect(line("$1234.5")).toBe("$1.234,50");
+      setNumFormat("fr");
+      expect(line("1234.5 + 0")).toBe("1 234,5");
+    } finally {
+      setNumFormat("en");
+    }
+  });
+
+  test("precision caps plain decimals", () => {
+    try {
+      setPrecision(2);
+      expect(line("10 / 3")).toBe("3.33");
+      expect(line("100 m in km")).toBe("0.1 km");
+    } finally {
+      setPrecision(10);
     }
   });
 });

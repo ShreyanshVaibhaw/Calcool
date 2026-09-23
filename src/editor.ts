@@ -625,10 +625,10 @@ const answers = ViewPlugin.fromClass(
 );
 
 const theme = EditorView.theme({
-  "&": { height: "100%", fontSize: "15px", backgroundColor: "transparent" },
+  "&": { height: "100%", fontSize: "var(--ed-size, 15px)", backgroundColor: "transparent" },
   ".cm-scroller": {
     position: "relative",
-    fontFamily: "var(--font)",
+    fontFamily: "var(--ed-font, var(--font))",
     lineHeight: "1.75",
     paddingBottom: "35vh",
   },

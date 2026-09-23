@@ -2,7 +2,7 @@ import { useState, type RefObject } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { THEME_OPTIONS, type ThemeId } from "./theme";
 import { useAppUpdater } from "./useAppUpdater";
-import { applySettings, HOTKEY_CHOICES, loadSettings, saveSettings, type Settings } from "./settings";
+import { applySettings, FONT_CHOICES, HOTKEY_CHOICES, loadSettings, saveSettings, type Settings } from "./settings";
 import { canOpenBookFolder, openBookFolder } from "./storage";
 
 interface SettingsDialogProps {
@@ -109,6 +109,60 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
               <option value="us">US (236.6 mL)</option>
               <option value="metric">Metric (250 mL)</option>
               <option value="imperial">Imperial (284.1 mL)</option>
+            </select>
+          </div>
+          <div className="setting-row">
+            <label htmlFor="set-numregion">Number format</label>
+            <select
+              id="set-numregion"
+              value={settings.numRegion ?? "en"}
+              onChange={(e) => update({ numRegion: e.target.value as Settings["numRegion"] })}
+            >
+              <option value="en">1,000.50</option>
+              <option value="de">1.000,50</option>
+              <option value="fr">1 000,50</option>
+            </select>
+          </div>
+          <div className="setting-row">
+            <label htmlFor="set-precision">Decimals</label>
+            <input
+              id="set-precision"
+              type="number"
+              min={0}
+              max={15}
+              value={settings.precision ?? 10}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (Number.isInteger(n) && n >= 0 && n <= 15) update({ precision: n });
+              }}
+            />
+          </div>
+          <div className="setting-row">
+            <label htmlFor="set-fontsize">Font size</label>
+            <input
+              id="set-fontsize"
+              type="number"
+              min={10}
+              max={28}
+              value={settings.fontSize ?? 15}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (n >= 10 && n <= 28) update({ fontSize: n });
+              }}
+            />
+          </div>
+          <div className="setting-row">
+            <label htmlFor="set-fontfamily">Font</label>
+            <select
+              id="set-fontfamily"
+              value={settings.fontFamily ?? ""}
+              onChange={(e) => update({ fontFamily: e.target.value })}
+            >
+              {FONT_CHOICES.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.label}
+                </option>
+              ))}
             </select>
           </div>
           <div className="setting-row">

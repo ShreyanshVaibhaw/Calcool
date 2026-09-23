@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createEditor, EditorHandle } from "./editor";
 import { loadRates } from "./rates";
 import SettingsDialog from "./SettingsDialog";
+import { fontVars } from "./settings";
 import { readTheme, saveTheme, type ThemeId } from "./theme";
 import { loadBook, saveBook, newSheetObj, sheetTitle, decodeImportedFile, downloadFile, encodeSlvr, type Book, type Sheet } from "./storage";
 import { sheetRows, toCSV, toHTML } from "./export";
@@ -46,6 +47,7 @@ function App() {
   const [exportFmt, setExportFmt] = useState<"calcool" | "txt" | "slvr" | "csv" | "html">("calcool");
   const [dropFolder, setDropFolder] = useState<string | null>(null); // "inbox" or a folder name
   const fileRef = useRef<HTMLInputElement>(null);
+  const [fontStyle, setFontStyle] = useState(() => fontVars());
   const [theme, setTheme] = useState<ThemeId>(readTheme);
 
   const chooseTheme = (nextTheme: ThemeId) => {
@@ -486,7 +488,11 @@ function App() {
           ≡
         </button>
       )}
-      <div className="editor-wrap" ref={host} />
+      <div
+        className="editor-wrap"
+        ref={host}
+        style={{ "--ed-size": fontStyle.fontSize, ...(fontStyle.fontFamily ? { "--ed-font": fontStyle.fontFamily } : {}) } as React.CSSProperties}
+      />
       {shownTotal && (
         <div className="total-pill">
           <button className="total-mode" type="button" title={`Total mode: ${totalMode} — click to switch`} onClick={cycleMode}>
@@ -497,7 +503,15 @@ function App() {
           </button>
         </div>
       )}
-      <SettingsDialog dialogRef={settingsDialog} theme={theme} onThemeChange={chooseTheme} onEngineChange={() => handle.current?.refresh()} />
+      <SettingsDialog
+        dialogRef={settingsDialog}
+        theme={theme}
+        onThemeChange={chooseTheme}
+        onEngineChange={() => {
+          handle.current?.refresh();
+          setFontStyle(fontVars());
+        }}
+      />
     </div>
   );
 }

@@ -3,13 +3,30 @@ import { unitById } from "./units";
 import { MONTH_NAMES, fromEpochDay, todayEpoch, toEpochDay, weekdayName } from "./dates";
 import { epochMinToWall, localZone } from "./times";
 
-const group = (intPart: string) => intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+// Display region: which separators answers render with. Parsing accepts every
+// region regardless (see parseNumericLiteral); this only changes output.
+export type NumRegion = "en" | "de" | "fr";
+let numRegion: NumRegion = "en";
+export function setNumFormat(r: NumRegion): void {
+  numRegion = r;
+}
+const SEP = (): { g: string; d: string } =>
+  numRegion === "de" ? { g: ".", d: "," } : numRegion === "fr" ? { g: " ", d: "," } : { g: ",", d: "." };
+
+// Default cap on decimals for plain numbers (per-line "to N dp" still wins).
+// Quantities and percents keep their 2dp unless the cap is lower.
+let defaultPrecision = 10;
+export function setPrecision(n: number): void {
+  defaultPrecision = Math.max(0, Math.min(20, Math.floor(n)));
+}
+
+const group = (intPart: string) => intPart.replace(/\B(?=(\d{3})+(?!\d))/g, SEP().g);
 
 function groupFixed(s: string): string {
   const neg = s.startsWith("-");
   if (neg) s = s.slice(1);
   const [int, frac] = s.split(".");
-  return (neg ? "-" : "") + group(int) + (frac !== undefined ? "." + frac : "");
+  return (neg ? "-" : "") + group(int) + (frac !== undefined ? SEP().d + frac : "");
 }
 
 // SI notation for large clean numbers: 300,000 -> 300k, 3,300,000 -> 3.3M
@@ -35,7 +52,7 @@ function trimZeros(s: string): string {
 }
 
 export function formatDecimal(d: Decimal, opts: { maxDp?: number; si?: boolean } = {}): string {
-  const maxDp = opts.maxDp ?? 10;
+  const maxDp = opts.maxDp ?? defaultPrecision;
   if (opts.si !== false) {
     const c = siCompact(d);
     if (c) return c;
@@ -66,7 +83,7 @@ function baseFmt(d: Decimal, mode: "hex" | "bin" | "oct"): string {
 }
 
 function sci(d: Decimal): string {
-  return d.toExponential().replace("e+", "e");
+  return d.toExponential().replace("e+", "e").replace(".", SEP().d);
 }
 
 const p2 = (n: number): string => String(n).padStart(2, "0");
@@ -85,7 +102,7 @@ function timespan(d: Decimal, unit: Unit): string {
   take(3600, "hour", "hours");
   take(60, "min", "min");
   const s = rem.toDecimalPlaces(2);
-  if (!s.isZero()) parts.push(`${trimZeros(s.toFixed())} s`);
+  if (!s.isZero()) parts.push(`${trimZeros(s.toFixed()).replace(".", SEP().d)} s`);
   if (!parts.length) return "0 s";
   return sign + parts.join(" ");
 }
@@ -112,7 +129,7 @@ function compoundStr(d: Decimal, big: Unit, sub: Unit, maxDp: number): string {
   }
   const bigS = `${groupFixed(whole.toFixed())} ${unitLabel(big, whole)}`;
   if (rem.isZero()) return sign + bigS;
-  const remS = `${trimZeros(rem.toFixed())} ${unitLabel(sub, rem)}`;
+  const remS = `${trimZeros(rem.toFixed()).replace(".", SEP().d)} ${unitLabel(sub, rem)}`;
   return sign + (whole.isZero() ? remS : `${bigS} ${remS}`);
 }
 
@@ -132,7 +149,7 @@ export function formatValue(v: Value): string {
       if (disp.mode === "hex" || disp.mode === "bin" || disp.mode === "oct") return baseFmt(v.d, disp.mode);
       if (disp.mode === "sci") return sci(v.d);
       if (disp.mode === "fraction") return fraction(v.d);
-      if (disp.mode === "multiplier") return formatDecimal(v.d, { maxDp: disp.dp ?? 10, si: false }) + "x";
+      if (disp.mode === "multiplier") return formatDecimal(v.d, { maxDp: disp.dp ?? defaultPrecision, si: false }) + "x";
       if (disp.mode === "pace") {
         // minutes per km/mi as MM:SS: 5 -> "05:00/km"
         const sign = v.d.isNeg() ? "-" : "";
@@ -148,10 +165,10 @@ export function formatValue(v: Value): string {
         const clock = hh.gt(0) ? `${hh.toFixed()}:${p2(mm2.toNumber())}:${p2(ss.toNumber())}` : `${p2(mm.toNumber())}:${p2(ss.toNumber())}`;
         return `${sign}${clock}/${disp.sub ?? "km"}`;
       }
-      return formatDecimal(v.d, { maxDp: disp.dp ?? 10, si: disp.dp === undefined });
+      return formatDecimal(v.d, { maxDp: disp.dp ?? defaultPrecision, si: disp.dp === undefined });
     }
     case "percent":
-      return formatDecimal(v.d, { maxDp: disp.dp ?? 2, si: false }) + "%";
+      return formatDecimal(v.d, { maxDp: disp.dp ?? Math.min(2, defaultPrecision), si: false }) + "%";
     case "bool":
       return v.b ? "true" : "false";
     case "quantity": {
@@ -195,8 +212,9 @@ export function formatValue(v: Value): string {
       }
       if (v.unit.category === "currency") return currencyStr(v.d, v.unit, disp.dp === undefined);
       const subId = disp.sub ?? (!disp.plain && disp.dp === undefined && AUTO_SUB[v.unit.id] && !v.d.isInteger() ? AUTO_SUB[v.unit.id] : undefined);
-      if (subId) return compoundStr(v.d, v.unit, unitById(subId), disp.dp ?? 2);
-      const dNum = formatDecimal(v.d, { maxDp: disp.dp ?? 2, si: false });
+      const qdp = disp.dp ?? Math.min(2, defaultPrecision);
+      if (subId) return compoundStr(v.d, v.unit, unitById(subId), qdp);
+      const dNum = formatDecimal(v.d, { maxDp: qdp, si: false });
       return `${dNum} ${unitLabel(v.unit, v.d)}`;
     }
     case "date": {

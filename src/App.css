@@ -839,7 +839,7 @@ body {
   right: 0;
   width: 208px;
   padding: 0 18px 0 10px;
-  line-height: 26.25px; /* editor 15px x 1.75 */
+  line-height: calc(var(--ed-size, 15px) * 1.75); /* editor font size x 1.75 */
   text-align: right;
   white-space: nowrap;
   overflow: hidden;

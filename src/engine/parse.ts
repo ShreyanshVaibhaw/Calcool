@@ -1,5 +1,5 @@
 import { Decimal, Unit, Value, CalcError } from "./value";
-import { tokenize, RawTok } from "./tokenize";
+import { tokenize, RawTok, parseNumericLiteral } from "./tokenize";
 import { lookupUnitWord, lookupTwoWord, lookupSubstance, currencyBySymbol } from "./units";
 import { MONTHS, WDAYS, todayEpoch, toEpochDay, fromEpochDay, nearestWeekday, daysInMonth, holiday, isoWeek } from "./dates";
 import { lookupZoneWord, lookupZonePair, localZone, wallToEpochMin, epochMinToWall, offsetMin } from "./times";
@@ -247,6 +247,23 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
     const t = raw[i];
 
     if (t.t === "num") {
+      // space-grouped thousands ("1 000,50") glue onto the previous number
+      const prev = raw[i - 1];
+      const top = sig[sig.length - 1];
+      if (
+        prev?.t === "num" && top?.s === "num" && top.to === prev.to &&
+        prev.to + 1 === t.from && text[prev.to] === " " &&
+        /^\d{3}([,.]\d+)?$/.test(text.slice(t.from, t.to))
+      ) {
+        const last = sem[sem.length - 1];
+        if (last && last.from === base + top.from) sem.pop();
+        sig.pop();
+        const from = top.from;
+        S({ s: "num", d: parseNumericLiteral(text.slice(from, t.to).replace(/ /g, "")), base: t.base, from, to: t.to });
+        M(from, t.to, "number");
+        i++;
+        continue;
+      }
       S({ s: "num", d: t.d, base: t.base, from: t.from, to: t.to });
       M(t.from, t.to, "number");
       i++;
