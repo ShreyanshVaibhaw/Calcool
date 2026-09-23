@@ -692,6 +692,23 @@ body {
 .ck-label { color: var(--fg); font-weight: 600; }
 .ck-tag { color: var(--kw); font-weight: 600; }
 
+/* find/replace panel and go-to-line dialog follow the app theme */
+.cm-editor .cm-panels { background: var(--panel); color: var(--fg); }
+.cm-editor .cm-panels-top { border-bottom: 1px solid var(--sep); }
+.cm-editor .cm-search, .cm-editor .cm-dialog { padding: 6px 10px; font-size: 13px; }
+.cm-editor .cm-search label, .cm-editor .cm-dialog label { margin: 0 8px 0 2px; color: var(--prose); }
+.cm-editor .cm-textfield {
+  background: var(--bg); color: var(--fg); border: 1px solid var(--sep);
+  border-radius: 6px; padding: 3px 8px; font: inherit;
+}
+.cm-editor .cm-textfield:focus { outline: none; border-color: var(--accent); }
+.cm-editor .cm-button {
+  background: var(--bg); color: var(--fg); border: 1px solid var(--sep);
+  border-radius: 6px; padding: 3px 10px; font: inherit; cursor: pointer;
+}
+.cm-editor .cm-button:hover { border-color: var(--accent); }
+.cm-editor .cm-selectionMatch { background: var(--sel); border-radius: 2px; }
+
 /* Alt held: numbers advertise that they scrub */
 .cm-editor.ck-alt .ck-num {
   cursor: ew-resize;

@@ -1,6 +1,7 @@
 import { EditorView, ViewPlugin, ViewUpdate, Decoration, DecorationSet, WidgetType, keymap, drawSelection, highlightActiveLine } from "@codemirror/view";
 import { EditorState, StateField, StateEffect, RangeSetBuilder, MapMode, ChangeSpec, Transaction, Extension } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { searchKeymap, highlightSelectionMatches, openSearchPanel, gotoLine, searchPanelOpen } from "@codemirror/search";
 import { evaluateSheet, SheetOut } from "./engine/sheet";
 import { Decimal } from "./engine/value";
 
@@ -132,6 +133,23 @@ const refRenumber = EditorState.transactionFilter.of((tr) => {
   if (!changes.length) return tr;
   return [tr, { changes, sequential: true }];
 });
+
+// ---------------------------------------------------------------------------
+ // find and replace (Ctrl+F), replace (Ctrl+H), go to line (Ctrl+G)
+ // ---------------------------------------------------------------------------
+
+// Ctrl+H opens find with the cursor parked in the replace field
+function openReplacePanel(view: EditorView): boolean {
+  if (!openSearchPanel(view)) return false;
+  window.setTimeout(() => {
+    const input = view.dom.querySelector('.cm-search input[name="replace"]');
+    if (input instanceof HTMLInputElement) {
+      input.focus();
+      input.select();
+    }
+  }, 0);
+  return true;
+}
 
 // ---------------------------------------------------------------------------
 // reference insertion helpers
@@ -322,7 +340,10 @@ const answers = ViewPlugin.fromClass(
     }
 
     update(u: ViewUpdate) {
-      if (u.docChanged || u.viewportChanged || u.geometryChanged || u.transactions.some((tr) => tr.effects.some((e) => e.is(recalc)))) {
+      // the search panel pushes content down, so answers re-measure with it too
+      const panelNow = searchPanelOpen(u.state);
+      const panelBefore = searchPanelOpen(u.startState);
+      if (u.docChanged || u.viewportChanged || u.geometryChanged || panelNow !== panelBefore || u.transactions.some((tr) => tr.effects.some((e) => e.is(recalc)))) {
         this.schedule();
       }
     }
@@ -429,6 +450,10 @@ export function createEditor(
     highlightActiveLine(),
     EditorView.lineWrapping,
     keymap.of([
+      { key: "Ctrl-g", run: gotoLine, preventDefault: true },
+      { key: "Mod-h", run: openReplacePanel, preventDefault: true },
+      // Ctrl+D stays free for duplicate-line in 2.4
+      ...searchKeymap.filter((b) => b.key !== "Mod-d"),
       {
         key: "Ctrl-\\",
         run: (view) => {
@@ -446,6 +471,7 @@ export function createEditor(
     refRenumber,
     operatorAutoRef,
     scrubbing(),
+    highlightSelectionMatches(),
     EditorView.decorations.compute([sheetField], (s) => getDecos(s).marks),
     EditorView.decorations.compute([sheetField], (s) => getDecos(s).refs),
     EditorView.atomicRanges.of((view) => getDecos(view.state).refs),
