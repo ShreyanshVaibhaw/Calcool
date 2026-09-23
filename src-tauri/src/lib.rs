@@ -1,4 +1,6 @@
 use tauri::Manager;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 // ---- sheetbook on real files: Documents\Calcool, one .calcool text file per sheet ----
@@ -120,6 +122,43 @@ fn toggle_quick(app: &tauri::AppHandle) {
     }
 }
 
+fn show_main(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
+// tray icon: left-click shows the app; menu offers Show, Quick popup, Quit
+fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
+    let show = MenuItem::with_id(app, "show", "Show Calcool", true, None::<&str>)?;
+    let quick = MenuItem::with_id(app, "quick", "Quick popup", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show, &quick, &quit])?;
+    let _tray = TrayIconBuilder::new()
+        .icon(app.default_window_icon().cloned().unwrap())
+        .menu(&menu)
+        .show_menu_on_left_click(true)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => show_main(app),
+            "quick" => toggle_quick(app),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main(tray.app_handle());
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -136,8 +175,15 @@ pub fn run() {
                 })
                 .build(),
         )
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // a second launch focuses the open window instead of opening a new one
+            show_main(app);
+        }))
         .invoke_handler(tauri::generate_handler![set_hotkey, book_load, book_save, open_book_dir])
         .setup(|app| {
+            if let Err(e) = build_tray(app.handle()) {
+                eprintln!("[tray] build failed: {e:?}");
+            }
             let gs = app.global_shortcut();
             for candidate in HOTKEY_CANDIDATES {
                 match gs.register(candidate) {
