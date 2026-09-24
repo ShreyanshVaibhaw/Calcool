@@ -79,6 +79,21 @@ Settings has an optional sync folder: every save mirrors each sheet there as a `
 - Offline launch works; currency lines show the bundled fallback rates, no crash
 - Settings shows the running version and Check for updates finds the signed GitHub release
 
+## Manual QA (before each release; needs the running app)
+
+Automated in `npm test` where noted, hands-on otherwise:
+
+- Fresh install shows the welcome sheet (automated: empty book gets `DEFAULT_DOC`)
+- Type each sample from the top of this file and confirm the answers (verified via CLI)
+- Rename a sheet, empty the title, confirm it reverts to auto title
+- Delete a sheet, confirm trash recovery path
+- Change theme, tax rate, workday region, hotkey, confirm open sheets re-evaluate
+- Toggle sidebar, search sheets, Ctrl+N, delete
+- Quick popup: Alt+Space, type `21 miles`, Enter copies, Esc closes
+- Scrub a number with Alt+drag, undo once, confirm dependents revert
+- Offline launch: currency shows fallback values, no crash (automated: offline-safety test)
+- Print or HTML export of a sheet with totals (automated: totals-export test)
+
 ## Next (see SPEC.md for the full list)
 
 Everything in the SPEC roadmap is shipped, P0 through P3.

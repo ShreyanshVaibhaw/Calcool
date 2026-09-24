@@ -8,6 +8,16 @@ describe("sheetRows", () => {
       { line: "just words", answer: "" },
     ]);
   });
+  test("a sheet with totals exports every row including the total", () => {
+    const rows = sheetRows("rent = $1,450\nrent * 12\ntotal");
+    expect(rows).toEqual([
+      { line: "rent = $1,450", answer: "$1,450.00" },
+      { line: "rent * 12", answer: "$17,400.00" },
+      { line: "total", answer: "$18,850.00" },
+    ]);
+    expect(toCSV(rows)).toContain('total,"$18,850.00"');
+    expect(toHTML("Budget", rows)).toContain("<td>total</td><td>$18,850.00</td>");
+  });
 });
 
 describe("toCSV", () => {
