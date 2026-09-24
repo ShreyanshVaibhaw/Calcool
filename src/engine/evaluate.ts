@@ -840,7 +840,8 @@ export function convertValue(v: Value, t: Target): Value {
     case "nearest": {
       if (t.m.isZero()) bad();
       if (v.kind === "number" || v.kind === "quantity" || v.kind === "percent") {
-        const rounded = v.d.div(t.m).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).mul(t.m);
+        const mode = t.dir === "up" ? Decimal.ROUND_CEIL : t.dir === "down" ? Decimal.ROUND_FLOOR : Decimal.ROUND_HALF_UP;
+        const rounded = v.d.div(t.m).toDecimalPlaces(0, mode).mul(t.m);
         if (t.frac && v.kind === "number") return { ...v, d: rounded, disp: { ...v.disp, mode: "fraction" } };
         return { ...v, d: rounded };
       }

@@ -98,7 +98,7 @@ P0/P1/P2 marks our build priority (P0 = v1).
 ### Dates and times (P1, big but table-stakes)
 
 - `today + 3 weeks`, `10 June + 3 weeks | 1 July`, `April 1, 2019 - 3 months 5 days`, `tomorrow`, `3 days ago`, `2 weeks from today`.
-- Intervals: `January 10 - February 5 | 3 weeks 5 days`, `days since July 15`, `days until Christmas`, `days between 3 March and 30 May | 88 days`, `1978 to 2021 | 42 years`.
+- Intervals: `January 10 - February 5 | 3 weeks 5 days`, `days since July 15`, `days until Christmas`, `days between 3 March and 30 May | 88 days`, `1978 to 2021 | 43 years`.
 - Weekdays: `next friday`, `Monday in 3 weeks`, `day of the week on January 24, 1984 | Tuesday`.
 - Quantities: `days in February 2020 | 29 days`, `hours in June`, `days left in 2026`, ISO week `week of year`.
 - Calendar-aware month math: `Jan 31 2020 + 1 month | Feb 29 2020`.

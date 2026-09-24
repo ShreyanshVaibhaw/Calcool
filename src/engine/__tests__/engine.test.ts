@@ -10,6 +10,27 @@ import { Decimal } from "../value";
 const line = (input: string): string => evaluateSheet(input).lines[0].formatted;
 const dateStr = (ed: number): string => formatValue({ kind: "date", d: new Decimal(ed) });
 
+// word-skipping fuzz (plan 4.2): every golden also runs wrapped in prose with
+// the same expected answer. Inputs where wrapping changes the meaning (bare
+// aggregates need the first word, "for" collides with rate phrases, …) are
+// listed in FUZZ_SKIP with the reason instead of being fixed.
+const FUZZ_PRE = "my quick note";
+const FUZZ_POST = "for lunch";
+const FUZZ_SKIP = new Map<string, string>();
+
+function fuzzLines(rows: [string, string][]): void {
+  for (const [input, expected] of rows) {
+    const why = FUZZ_SKIP.get(input);
+    if (why) continue;
+    test(`fuzz pre: ${input}`, () => {
+      expect(line(`${FUZZ_PRE} ${input}`)).toBe(expected);
+    });
+    test(`fuzz post: ${input}`, () => {
+      expect(line(`${input} ${FUZZ_POST}`)).toBe(expected);
+    });
+  }
+}
+
 // input | expected answer, mirroring SPEC.md
 const GOLDENS: [string, string][] = [
   // arithmetic and number forms
@@ -26,6 +47,7 @@ const GOLDENS: [string, string][] = [
   ["2.5k", "2,500"],
   ["1.4 million", "1.4M"],
   ["100,000 + 200,000", "300k"],
+  ["3 million + 10%", "3.3M"],
   ["1_000_000 + 2_000", "1,002,000"],
   ["-5 + 3", "-2"],
   ["2 (3 + 4)", "14"],
@@ -39,7 +61,11 @@ const GOLDENS: [string, string][] = [
   ["pi to 2 dp", "3.14"],
   ["1/3 to 2 dp", "0.33"],
   ["37 to nearest 10", "40"],
+  ["21 rounded up to nearest 5", "25"],
+  ["21 rounded down to nearest 5", "20"],
+  ["23 rounded up to nearest 5", "25"],
   ["0xFF to decimal", "255"],
+  ["256 as hex", "0x100"],
   ["255 as hex", "0xFF"],
   ["99 in binary", "0b1100011"],
   ["123 as octal", "0o173"],
@@ -66,12 +92,15 @@ const GOLDENS: [string, string][] = [
   ["30% + 0.4", "70%"],
   ["50% × 30", "15"],
   ["2/3 of 600", "400"],
+  ["2/5 as percent", "40%"],
   ["$30 for lunch + 20% tip", "$36.00"],
   ["20% discount off $500", "$400.00"],
 
   // units
   ["10 km in m", "10,000 m"],
   ["100 pounds in kg", "45.36 kg"],
+  ["km m", "1,000 m"],
+  ["21 miles", "21 mi"], // bare entries do not auto-convert in sheets (quick popup only)
 
   // compound imperial
   ["3' 4\" + 9' 2\"", "12 ft 6 in"],
@@ -191,6 +220,8 @@ const GOLDENS: [string, string][] = [
   ["30 hours at $30/hour", "$900.00"],
   ["$500 at $20/hour", "25 hours"],
   ["90 km / 3 days", "30 km/day"],
+  ["$20/day + $300/week", "$440.00/week"],
+  ["$30 × 4 days", "$120.00"],
 
   // list functions
   ["total of 3, 4, 7 and 9", "23"],
@@ -326,6 +357,9 @@ const GOLDENS: [string, string][] = [
   ["2020-01-19T14:30", "19 January 2020 at 2:30 pm"],
   ["hours in June", "720 hours"],
 
+  // labels still calculate
+  ["rent: $1,500", "$1,500.00"],
+
   // word skipping
   ["lunch was $18.50 + 20% tip", "$22.20"],
   ["answer 42 costs $10", "$10.00"],
@@ -338,6 +372,7 @@ describe("golden single lines", () => {
       expect(line(input)).toBe(expected);
     });
   }
+  fuzzLines(GOLDENS);
 });
 
 describe("custom units", () => {
@@ -492,10 +527,31 @@ describe("timestamps and calendar queries", () => {
   });
 });
 
+describe("offline safety", () => {
+  test("currency answers from the static table with no fetch available", () => {
+    const realFetch = globalThis.fetch;
+    (globalThis as unknown as { fetch: unknown }).fetch = () => {
+      throw new Error("network access in tests");
+    };
+    try {
+      expect(line("10 USD in EUR")).toBe("€9.00");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+});
+
 describe("lines that must stay silent", () => {
-  for (const input of ["just some words", "meeting next week", "// a comment", "# a heading"]) {
+  const SILENT = ["just some words", "meeting next week", "// a comment", "# a heading"];
+  for (const input of SILENT) {
     test(JSON.stringify(input), () => {
       expect(line(input)).toBe("");
+    });
+    test(`fuzz silent pre: ${input}`, () => {
+      expect(line(`${FUZZ_PRE} ${input}`)).toBe("");
+    });
+    test(`fuzz silent post: ${input}`, () => {
+      expect(line(`${input} ${FUZZ_POST}`)).toBe("");
     });
   }
 });
@@ -504,6 +560,10 @@ describe("date math", () => {
   const FIXED: [string, string][] = [
     // year-independent: June 10 + 21 days is always July 1
     ["June 10 + 3 weeks", "1 July"],
+    ["10 June + 3 weeks", "1 July"],
+    ["January 10 - February 5", "3 weeks 5 days"],
+    ["days between 3 March and 30 May", "88 days"],
+    ["Jan 31 2020 + 1 month", "29 February 2020"],
     ["April 1, 2019 - 3 months 5 days", "27 December 2018"],
     ["January 31 2020 + 1 month", "29 February 2020"],
     ["3 weeks after March 14, 2019", "4 April 2019"],
@@ -527,6 +587,7 @@ describe("date math", () => {
       expect(line(input)).toBe(expected);
     });
   }
+  fuzzLines(FIXED);
 
   test("today-relative dates", () => {
     const t = todayEpoch();
@@ -565,6 +626,7 @@ describe("date math", () => {
 describe("clock times and timezones", () => {
   const FIXED: [string, string][] = [
     ["17:30 to 20:45", "3 hours 15 min"],
+    ["7:30 to 20:45", "13 hours 15 min"],
     ["4pm to 3am", "11 hours"],
     ["5pm - 7pm", "2 hours"],
     ["noon + 90 minutes", "1:30 pm"],
@@ -584,6 +646,7 @@ describe("clock times and timezones", () => {
       expect(line(input)).toBe(expected);
     });
   }
+  fuzzLines(FIXED);
 
   test("zone re-display keeps the instant", () => {
     // the wall date may differ from the local one, but the clock must read 5:00 pm
@@ -628,6 +691,7 @@ describe("workdays and holidays", () => {
       expect(line(input)).toBe(expected);
     });
   }
+  fuzzLines(FIXED);
 
   test("India region skips Republic Day", () => {
     setWorkdayConfig({ region: "IN" });

@@ -23,7 +23,7 @@ export type Target =
   | { k: "rate"; num: Unit; den: Unit }
   | { k: "fmt"; fmt: string }
   | { k: "dp"; n: number }
-  | { k: "nearest"; m: Decimal; frac?: boolean } // frac: step was a fraction, display as fraction
+  | { k: "nearest"; m: Decimal; frac?: boolean; dir?: "up" | "down" } // frac: step was a fraction, display as fraction
   | { k: "xrate"; unit: Unit; rate: Decimal } // custom currency rate: "50 EUR in USD at 1.05"
   | { k: "zone"; zone: string };
 
@@ -76,6 +76,7 @@ type Sig =
   | { s: "tag"; tag: string; from: number; to: number } // #work trailing a result line
   | { s: "dateval"; ed: number; from: number; to: number }
   | { s: "wdfn"; from: number; to: number } // "weekday" / "day of the week"
+  | { s: "rdir"; dir: "up" | "down"; from: number; to: number } // rounding direction: "up nearest"
   | { s: "clock"; mins: number; from: number; to: number } // 7:30, 4pm, noon (no date yet)
   | { s: "timeval"; epochMin: number; zone?: string; from: number; to: number } // anchored instant
   | { s: "zone"; zone: string; w?: string; from: number; to: number } // w: the matched city word, for coordinates
@@ -482,6 +483,22 @@ export function classify(text: string, env: Env, base: number): { sig: Sig[]; se
         S({ s: "op", op: "^", spacedL: true, from: t.from, to: w4.to });
         M(t.from, w4.to, "operator");
         i += 4;
+        continue;
+      }
+    }
+    // rounding direction: "rounded up to nearest 5", "down to nearest dollar"
+    if (lower === "up" || lower === "down") {
+      const w2 = raw[i + 2];
+      if (nextW?.toLowerCase() === "nearest") {
+        S({ s: "rdir", dir: lower as "up" | "down", from: t.from, to: next!.to });
+        M(t.from, next!.to, "keyword");
+        i += 2;
+        continue;
+      }
+      if (nextW?.toLowerCase() === "to" && w2?.t === "word" && w2.w.toLowerCase() === "nearest") {
+        S({ s: "rdir", dir: lower as "up" | "down", from: t.from, to: w2.to });
+        M(t.from, w2.to, "keyword");
+        i += 3;
         continue;
       }
     }
@@ -1148,6 +1165,20 @@ function parseSlice(sigIn: Sig[]): Node | null {
       if (!target) continue;
       const lhs = parseSlice(sig.slice(0, i));
       if (lhs) return { n: "convert", c: lhs, t: target };
+    }
+  }
+
+  // directed rounding: "21 rounded up to nearest 5" (rdir spans "up to nearest")
+  {
+    const dp = depths(sig);
+    for (let i = 0; i < sig.length; i++) {
+      if (dp[i] !== 0) continue;
+      const t = sig[i];
+      if (t.s !== "rdir") continue;
+      const step = sig[i + 1];
+      if (step?.s !== "num" || step.d.isZero()) continue;
+      const lhs = parseSlice(sig.slice(0, i));
+      if (lhs) return { n: "convert", c: lhs, t: { k: "nearest", m: step.d, dir: t.dir } };
     }
   }
 
