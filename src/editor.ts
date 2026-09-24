@@ -244,6 +244,15 @@ function insertLineRef(view: EditorView): boolean {
   return true;
 }
 
+// keyboard-only answer copy: the cursor line's answer goes to the clipboard
+function copyAnswerAtCursor(view: EditorView): boolean {
+  const lineNo = view.state.doc.lineAt(view.state.selection.main.head).number;
+  const out = view.state.field(sheetField).lines[lineNo - 1];
+  if (!out?.formatted) return false;
+  navigator.clipboard.writeText(out.formatted).catch(() => {});
+  return true;
+}
+
 // drag an answer onto another answer to move its line below that line
 function moveLineTo(view: EditorView, fromLine: number, toLine: number): boolean {
   const doc = view.state.doc;
@@ -538,21 +547,29 @@ interface Row {
 const answers = ViewPlugin.fromClass(
   class {
     container: HTMLDivElement;
+    sr: HTMLDivElement; // screen-reader live mirror of the cursor line's answer
+    announced = "";
     pool = new Map<number, HTMLDivElement>(); // lineNo -> live div, reused across keystrokes
     rows = new Map<number, Row>(); // latest measured row per line for the handlers
 
     constructor(readonly view: EditorView) {
       this.container = document.createElement("div");
       this.container.className = "ck-answers";
+      this.container.setAttribute("aria-hidden", "true"); // positioned duplicates; the live region below carries them
       view.scrollDOM.appendChild(this.container);
+      this.sr = document.createElement("div");
+      this.sr.className = "ck-sr-only";
+      this.sr.setAttribute("aria-live", "polite");
+      view.scrollDOM.appendChild(this.sr);
       this.schedule();
     }
 
     update(u: ViewUpdate) {
-      // the search panel pushes content down, so answers re-measure with it too
+      // the search panel pushes content down, so answers re-measure with it too;
+      // cursor moves re-announce the line's answer to screen readers
       const panelNow = searchPanelOpen(u.state);
       const panelBefore = searchPanelOpen(u.startState);
-      if (u.docChanged || u.viewportChanged || u.geometryChanged || panelNow !== panelBefore || u.transactions.some((tr) => tr.effects.some((e) => e.is(recalc)))) {
+      if (u.docChanged || u.viewportChanged || u.geometryChanged || u.selectionSet || panelNow !== panelBefore || u.transactions.some((tr) => tr.effects.some((e) => e.is(recalc)))) {
         this.schedule();
       }
     }
@@ -560,7 +577,7 @@ const answers = ViewPlugin.fromClass(
     schedule() {
       const self = this;
       this.view.requestMeasure({
-        read: (view): Row[] => {
+        read: (view): { rows: Row[]; cursor: number } => {
           const sheet = view.state.field(sheetField);
           const rect = view.scrollDOM.getBoundingClientRect();
           const baseTop = view.documentTop - rect.top + view.scrollDOM.scrollTop;
@@ -576,9 +593,9 @@ const answers = ViewPlugin.fromClass(
             if (!out || !out.formatted) continue;
             rows.push({ top: baseTop + top, text: out.formatted, line: view.state.doc.line(lineNo).text, kind: out.kind, lineNo });
           }
-          return rows;
+          return { rows, cursor: view.state.doc.lineAt(view.state.selection.main.head).number };
         },
-        write: (rows: Row[]) => {
+        write: ({ rows, cursor }: { rows: Row[]; cursor: number }) => {
           self.rows.clear();
           for (const r of rows) self.rows.set(r.lineNo, r);
           const seen = new Set<number>();
@@ -602,6 +619,12 @@ const answers = ViewPlugin.fromClass(
               el.remove();
               self.pool.delete(lineNo);
             }
+          }
+          // live text for screen readers: announce the cursor line's answer when it changes
+          const current = self.rows.get(cursor)?.text ?? "";
+          if (current !== self.announced) {
+            self.announced = current;
+            self.sr.textContent = current;
           }
         },
       });
@@ -652,6 +675,7 @@ const answers = ViewPlugin.fromClass(
 
     destroy() {
       this.container.remove();
+      this.sr.remove();
     }
   },
 );
@@ -707,6 +731,7 @@ export function createEditor(
       ...searchKeymap.filter((b) => b.key !== "Mod-d"),
       ...completionKeymap,
       { key: "Mod-d", run: duplicateLines, preventDefault: true },
+      { key: "Mod-Shift-c", run: copyAnswerAtCursor, preventDefault: true },
       { key: "Mod-/", run: toggleComment, preventDefault: true },
       { key: "Mod-t", run: insertSubtotal, preventDefault: true },
       { key: "Mod-l", run: insertLineRef, preventDefault: true },

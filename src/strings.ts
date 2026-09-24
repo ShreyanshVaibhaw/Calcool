@@ -239,6 +239,7 @@ const en: Strings = {
           ["Ctrl+Space", "Autocomplete a variable or unit"],
           ["Alt+drag / Alt+scroll", "Scrub the number under the cursor"],
           ["Ctrl+Z / Ctrl+Y", "Undo / redo (one drag is one undo)"],
+          ["Ctrl+Shift+C", "Copy the answer on the current line"],
         ],
       },
       {
@@ -258,6 +259,7 @@ const en: Strings = {
           ["Ctrl+\\", "Show or hide the sheet sidebar"],
           ["Ctrl+,", "Open settings"],
           ["Double-click a sheet title", "Rename it (empty reverts to auto)"],
+          ["Enter / F2 / Delete on a focused sheet", "Open / rename / delete it"],
         ],
       },
       {

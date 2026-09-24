@@ -314,8 +314,23 @@ function App() {
       key={sheet.id}
       className={"sheet-item" + (sheet.id === book?.activeId ? " active" : "")}
       draggable
+      tabIndex={0}
+      role="button"
+      aria-label={sheet.name || sheetTitle(sheet.text)}
       onDragStart={(e) => e.dataTransfer.setData("text/sheet-id", sheet.id)}
       onClick={() => selectSheet(sheet.id)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          selectSheet(sheet.id);
+        } else if (e.key === "Delete") {
+          e.preventDefault();
+          deleteSheet(sheet.id);
+        } else if (e.key === "F2") {
+          e.preventDefault();
+          setRenamingId(sheet.id);
+        }
+      }}
     >
       {renamingId === sheet.id ? (
         <input
