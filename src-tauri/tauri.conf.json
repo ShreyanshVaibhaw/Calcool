@@ -35,7 +35,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' customprotocol: asset:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: https: http: data:; font-src 'self' asset: data:; connect-src 'self' https: http://localhost:1420 ws://localhost:1421; object-src 'none'; base-uri 'self'"
     }
   },
   "bundle": {

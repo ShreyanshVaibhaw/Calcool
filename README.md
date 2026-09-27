@@ -27,15 +27,20 @@ npm run tauri dev    # the actual Windows app, debug
 npm run tauri build  # release build; installers land in src-tauri/target/release/bundle/
 ```
 
+`npm run dev` needs port 1420 free (Tauri pins it via `strictPort`); the preflight names the holding PID and the kill command when it is taken.
+Set `TAURI_DEV_HOST` for on-device testing — that also needs port 1421 free for the HMR websocket.
+
 ## CLI and sync folder
 
 ```
-bin\calcool "June 20 + 3 weeks"   # prints 11 July (reuses the app engine, offline rates)
+bin\calcool "June 20 + 3 weeks"   # Windows: prints 11 July (reuses the app engine, offline rates)
+bin/calcool "June 20 + 3 weeks"   # macOS/Linux twin
 echo 100 pounds in kg | bin\calcool
 ```
 
 Quote the expression; in cmd a `^` power needs spaces (`"2 ^ 3"`).
-`npm run cli -- ...` works too for single-word expressions, but npm mangles quoted spaces on Windows, so the batch file is the real entry point.
+`npm run cli -- ...` works too for single-word expressions, but npm mangles quoted spaces on Windows, so the launcher scripts are the real entry points.
+All three bundle to the OS temp dir on each run, never into the repo.
 Settings has an optional sync folder: every save mirrors each sheet there as a `.calcool` text file, so OneDrive/Dropbox picks it up. Last write wins; `Documents\Calcool` stays the source of truth.
 
 ## Works today

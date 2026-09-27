@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { THEME_OPTIONS, type ThemeId } from "./theme";
 import { useAppUpdater } from "./useAppUpdater";
 import { applySettings, FONT_CHOICES, HOTKEY_CHOICES, loadSettings, saveSettings, type Settings } from "./settings";
+import { describeHotkeyOutcome, type HotkeyResult } from "./hotkey";
+import { getRatesStatus } from "./rates";
 import { s } from "./strings";
 import { canOpenBookFolder, openBookFolder } from "./storage";
 
@@ -18,6 +20,14 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
   const updateReady = state.phase === "available";
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [hotkeyNote, setHotkeyNote] = useState("");
+  const [hotkeyFailed, setHotkeyFailed] = useState(false);
+  // rates status as of dialog open (App/Quick load rates at startup)
+  const [ratesNote] = useState(() => {
+    const st = getRatesStatus();
+    if (st.source === "static" || st.asOf === null) return s.settings.ratesStatic;
+    const date = new Date(st.asOf).toLocaleDateString();
+    return st.source === "live" ? s.settings.ratesLive(date) : s.settings.ratesCached(date);
+  });
 
   const update = (patch: Partial<Settings>) => {
     const next = { ...settings, ...patch };
@@ -27,11 +37,22 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
     onEngineChange();
   };
 
+  const applyHotkey = (accel: string) => {
+    invoke<HotkeyResult>("set_hotkey", { accel })
+      .then((r) => {
+        const outcome = describeHotkeyOutcome(accel, r);
+        setHotkeyNote(outcome.note);
+        setHotkeyFailed(outcome.failed);
+      })
+      .catch(() => {
+        setHotkeyNote(s.settings.hotkeyInstalledOnly);
+        setHotkeyFailed(false);
+      });
+  };
+
   const chooseHotkey = (accel: string) => {
     update({ hotkey: accel });
-    invoke<string | null>("set_hotkey", { accel })
-      .then((got) => setHotkeyNote(got ? s.settings.hotkeyActive(got) : s.settings.hotkeyNone))
-      .catch(() => setHotkeyNote(s.settings.hotkeyInstalledOnly));
+    applyHotkey(accel);
   };
 
   return (
@@ -203,7 +224,16 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
               ))}
             </select>
           </div>
-          {hotkeyNote && <p className="setting-hint">{hotkeyNote}</p>}
+          {hotkeyNote && (
+            <p className="setting-hint">
+              {hotkeyNote}{" "}
+              {hotkeyFailed && (
+                <button className="update-button" type="button" onClick={() => applyHotkey(settings.hotkey)}>
+                  {s.settings.hotkeyRetry}
+                </button>
+              )}
+            </p>
+          )}
           {canOpenBookFolder && (
             <div className="setting-row">
               <label>{s.settings.sheetsLocation}</label>
@@ -225,6 +255,7 @@ export default function SettingsDialog({ dialogRef, theme, onThemeChange, onEngi
             </div>
           )}
           {canOpenBookFolder && !!settings.syncFolder?.trim() && <p className="setting-hint">{s.settings.syncHint}</p>}
+          <p className="setting-hint">{ratesNote}</p>
         </section>
 
         <section className="update-panel" aria-labelledby="updates-title">

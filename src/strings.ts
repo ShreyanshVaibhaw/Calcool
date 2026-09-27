@@ -68,13 +68,19 @@ export interface SettingsStrings {
   hotkey: string;
   hotkeyAuto: string;
   hotkeyActive: (accel: string) => string;
+  hotkeyFallback: (wanted: string, got: string) => string;
   hotkeyNone: string;
+  hotkeyNoneTried: (tried: string) => string;
+  hotkeyRetry: string;
   hotkeyInstalledOnly: string;
   sheetsLocation: string;
   openSheetsFolder: string;
   syncFolder: string;
   syncPlaceholder: string;
   syncHint: string;
+  ratesLive: (date: string) => string;
+  ratesCached: (date: string) => string;
+  ratesStatic: string;
   updatesTitle: string;
   appVersion: (version: string) => string;
   updateProgress: string;
@@ -95,7 +101,10 @@ export interface UpdaterStrings {
   downloading: (version: string) => string;
   installing: string;
   checkFailed: (error: string) => string;
+  checkOffline: string;
+  checkSigFailed: string;
   installFailed: (error: string) => string;
+  installSigFailed: string;
 }
 
 export interface QuickStrings {
@@ -184,13 +193,19 @@ const en: Strings = {
     hotkey: "Quick popup hotkey",
     hotkeyAuto: "Auto (first available)",
     hotkeyActive: (accel) => `Active: ${accel}`,
+    hotkeyFallback: (wanted, got) => `${wanted} is taken, using ${got} instead`,
     hotkeyNone: "No hotkey could be registered",
+    hotkeyNoneTried: (tried) => `No hotkey could be registered (tried ${tried})`,
+    hotkeyRetry: "Retry",
     hotkeyInstalledOnly: "Applies in the installed app",
     sheetsLocation: "Sheets live in Documents\\Calcool",
     openSheetsFolder: "Open sheets folder",
     syncFolder: "Sync folder (optional)",
     syncPlaceholder: "e.g. C:\\Users\\me\\OneDrive\\Calcool",
     syncHint: "Each save mirrors every sheet there as a text file. Last write wins; Documents\\Calcool stays the source of truth.",
+    ratesLive: (date) => `Exchange rates: live, updated ${date}.`,
+    ratesCached: (date) => `Exchange rates: cached ${date}; will refresh when online.`,
+    ratesStatic: "Exchange rates: offline estimates.",
     updatesTitle: "App updates",
     appVersion: (version) => `Calcool ${version}`,
     updateProgress: "Update download progress",
@@ -210,7 +225,10 @@ const en: Strings = {
     downloading: (version) => `Downloading Calcool ${version}...`,
     installing: "Installing update and restarting...",
     checkFailed: (error) => `Could not check for updates. ${error}`,
+    checkOffline: "Couldn't reach the update server. Check your connection and retry.",
+    checkSigFailed: "The update signature could not be verified. Nothing was installed.",
     installFailed: (error) => `Update failed. ${error}`,
+    installSigFailed: "The downloaded update failed signature verification. Nothing was installed.",
   },
   quick: {
     placeholder: "Type a calculation…",

@@ -147,6 +147,7 @@ P0/P1/P2 marks our build priority (P0 = v1).
 ### Beyond v1
 
 - P1: multi-sheet sidebar with folders, search, autosaved sheetbook (single JSON file), `.slvr`-style export/import, plain text export, find and replace.
+- Storage (implemented, supersedes "single JSON file" above): sheets are real `.calcool` text files in `Documents/Calcool` plus a `book.json` index (`version`, ids, order, names, folders, trash). All writes are atomic (temp file + rename); the outgoing index is snapshotted to `backups/` (newest 5 kept). The cloud-folder mirror is one-way, full-state, last-write-wins: files changed only in the sync folder are overwritten on the next save, and a folder containing `book.json` is refused as a mirror target.
 - P1: Quick popup window on a global hotkey (Alt+Space style), tray icon, auto-converting single entries (`21 miles | 33.8 km`).
 - P2: scrubbable numbers (drag to change a number, watch dependents update), `Ctrl+D` duplicate line, move lines by dragging answers, `Ctrl+/` comment toggle, `Ctrl+T` subtotal, `Ctrl+L` + number line references, variable rename refactor.
 - P2: CSV/HTML/PDF export, print, copy line+answer, copy unformatted answer.

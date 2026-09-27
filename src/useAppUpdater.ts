@@ -22,6 +22,22 @@ function readableError(error: unknown): string {
   return String(error);
 }
 
+// Classify updater failures so offline and signature problems get distinct,
+// actionable copy instead of a raw plugin error. Pure: unit-tested below.
+export type UpdateErrorKind = "offline" | "signature" | "other";
+
+export function classifyUpdateError(error: unknown): UpdateErrorKind {
+  const msg = readableError(error).toLowerCase();
+  if (/signature|invalid signature|minisign|pubkey|verification failed|tamper/.test(msg)) return "signature";
+  if (
+    error instanceof TypeError || // fetch rejects TypeError when offline
+    /network|fetch failed|failed to fetch|enotfound|econn|etimedout|timed out|timeout|offline|dns|unreachable|connection|503|502|504/.test(msg)
+  ) {
+    return "offline";
+  }
+  return "other";
+}
+
 export function useAppUpdater() {
   const [state, setState] = useState<UpdateState>(INITIAL_STATE);
   const [version, setVersion] = useState("dev");
@@ -60,7 +76,14 @@ export function useAppUpdater() {
         message: s.updater.ready(update.version, update.body),
       });
     } catch (error) {
-      setState({ phase: "error", message: s.updater.checkFailed(readableError(error)) });
+      const kind = classifyUpdateError(error);
+      const message =
+        kind === "offline"
+          ? s.updater.checkOffline
+          : kind === "signature"
+            ? s.updater.checkSigFailed
+            : s.updater.checkFailed(readableError(error));
+      setState({ phase: "error", message });
     }
   }, []);
 
@@ -88,7 +111,13 @@ export function useAppUpdater() {
       const { relaunch } = await import("@tauri-apps/plugin-process");
       await relaunch();
     } catch (error) {
-      setState({ phase: "error", version: update.version, message: s.updater.installFailed(readableError(error)) });
+      // install is manual-only (never auto-installs); a signature failure here
+      // is surfaced once and stays on the error phase.
+      const message =
+        classifyUpdateError(error) === "signature"
+          ? s.updater.installSigFailed
+          : s.updater.installFailed(readableError(error));
+      setState({ phase: "error", version: update.version, message });
     }
   }, []);
 

@@ -119,9 +119,67 @@ function fileNames(book: Book): Map<string, string> {
   return out;
 }
 
-function indexJson(book: Book, files: Map<string, string>): string {
+export const BOOK_INDEX_VERSION = 1;
+
+// Index payload for book.json. Readers ignore `version` (see assembleBook),
+// so old indexes without it and future ones with extra fields both load.
+export function buildIndex(book: Book, files: Map<string, string>): string {
   const sheets: IndexEntry[] = book.sheets.map((s) => ({ id: s.id, file: files.get(s.id)!, name: s.name, folder: s.folder, created: s.created, modified: s.modified }));
-  return JSON.stringify({ activeId: book.activeId, trash: book.trash, folders: book.folders, sheets }, null, 2);
+  return JSON.stringify({ version: BOOK_INDEX_VERSION, activeId: book.activeId, trash: book.trash, folders: book.folders, sheets }, null, 2);
+}
+
+export interface AssembledBook {
+  book: Book | null; // null = no index and no files; caller falls back to localStorage migration
+  disk: Map<string, { file: string; text: string }>; // onDisk entries the caller should record
+}
+
+// Pure assembly of a Book from a book_load payload: index entries matched to
+// files, outside files adopted as new sheets, corrupt/missing index tolerated.
+// No storage I/O, so unit tests can drive every branch directly.
+export function assembleBook(indexRaw: string | null, files: { file: string; text: string }[]): AssembledBook {
+  const byFile = new Map(files.map((f) => [f.file, f.text]));
+  const disk = new Map<string, { file: string; text: string }>();
+  let book: Book | null = null;
+
+  if (indexRaw) {
+    try {
+      const idx = JSON.parse(indexRaw) as { activeId: string; trash: Sheet[]; folders: string[]; sheets: IndexEntry[] };
+      const sheets: Sheet[] = [];
+      for (const e of idx.sheets) {
+        const text = byFile.get(e.file);
+        if (text === undefined) continue; // file removed outside the app
+        sheets.push({ id: e.id, text, name: e.name, folder: e.folder, created: e.created, modified: e.modified });
+        disk.set(e.id, { file: e.file, text });
+        byFile.delete(e.file);
+      }
+      // files dropped into the folder from outside become sheets
+      for (const [file, text] of byFile) {
+        const s = newSheetObj(text);
+        s.name = file.replace(/\.calcool$/, "");
+        sheets.push(s);
+        disk.set(s.id, { file, text });
+      }
+      if (sheets.length) {
+        const folders = Array.isArray(idx.folders) ? idx.folders.filter((f) => typeof f === "string" && f.trim()) : [];
+        book = { sheets, trash: idx.trash ?? [], folders, activeId: sheets.some((s) => s.id === idx.activeId) ? idx.activeId : sheets[0].id };
+      }
+    } catch {
+      /* unreadable index: rebuild below */
+    }
+  }
+
+  if (!book && byFile.size) {
+    // files but no usable index: adopt them all
+    const sheets = [...byFile].map(([file, text]) => {
+      const s = newSheetObj(text);
+      s.name = file.replace(/\.calcool$/, "");
+      disk.set(s.id, { file, text });
+      return s;
+    });
+    book = { sheets, activeId: sheets[0].id, trash: [], folders: [] };
+  }
+
+  return { book, disk };
 }
 
 async function flushFs(book: Book): Promise<void> {
@@ -138,7 +196,7 @@ async function flushFs(book: Book): Promise<void> {
   }
   const deletes: string[] = [];
   for (const [id, prev] of onDisk) if (!seen.has(id)) deletes.push(prev.file);
-  await invoke("book_save", { index: indexJson(book, files), writes, renames, deletes });
+  await invoke("book_save", { index: buildIndex(book, files), writes, renames, deletes });
   for (const id of [...onDisk.keys()]) if (!seen.has(id)) onDisk.delete(id);
   for (const s of book.sheets) onDisk.set(s.id, { file: files.get(s.id)!, text: s.text });
   // optional one-way mirror into a cloud folder; never blocks the real save
@@ -151,47 +209,10 @@ async function flushFs(book: Book): Promise<void> {
 
 async function loadBookFs(): Promise<Book> {
   const r = await invoke<{ dir: string; index: string | null; files: { file: string; text: string }[] }>("book_load");
-  const byFile = new Map(r.files.map((f) => [f.file, f.text]));
-  let book: Book | null = null;
+  const { book: assembled, disk } = assembleBook(r.index, r.files);
+  for (const [id, e] of disk) onDisk.set(id, e);
 
-  if (r.index) {
-    try {
-      const idx = JSON.parse(r.index) as { activeId: string; trash: Sheet[]; folders: string[]; sheets: IndexEntry[] };
-      const sheets: Sheet[] = [];
-      for (const e of idx.sheets) {
-        const text = byFile.get(e.file);
-        if (text === undefined) continue; // file removed outside the app
-        sheets.push({ id: e.id, text, name: e.name, folder: e.folder, created: e.created, modified: e.modified });
-        onDisk.set(e.id, { file: e.file, text });
-        byFile.delete(e.file);
-      }
-      // files dropped into the folder from outside become sheets
-      for (const [file, text] of byFile) {
-        const s = newSheetObj(text);
-        s.name = file.replace(/\.calcool$/, "");
-        sheets.push(s);
-        onDisk.set(s.id, { file, text });
-      }
-      if (sheets.length) {
-        const folders = Array.isArray(idx.folders) ? idx.folders.filter((f) => typeof f === "string" && f.trim()) : [];
-        book = { sheets, trash: idx.trash ?? [], folders, activeId: sheets.some((s) => s.id === idx.activeId) ? idx.activeId : sheets[0].id };
-      }
-    } catch {
-      /* unreadable index: rebuild below */
-    }
-  }
-
-  if (!book && byFile.size) {
-    // files but no usable index: adopt them all
-    const sheets = [...byFile].map(([file, text]) => {
-      const s = newSheetObj(text);
-      s.name = file.replace(/\.calcool$/, "");
-      onDisk.set(s.id, { file, text });
-      return s;
-    });
-    book = { sheets, activeId: sheets[0].id, trash: [], folders: [] };
-  }
-
+  let book = assembled;
   if (!book) {
     // first run: migrate whatever localStorage held (or the welcome sheet)
     book = loadBookLocal();

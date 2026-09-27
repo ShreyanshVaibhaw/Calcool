@@ -1,0 +1,9 @@
+#!/bin/sh
+# Minimal CLI: bin/calcool "June 20 + 3 weeks" prints the answer.
+# POSIX twin of calcool.cmd (no `npm run`, so quoted groups stay intact).
+# The bundle goes to the OS temp dir, never into the repo.
+set -e
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="${TMPDIR:-/tmp}/calcool-cli.mjs"
+"$ROOT/node_modules/.bin/esbuild" "$ROOT/src/cli.ts" --bundle --platform=node --format=esm --outfile="$OUT" --log-level=error
+exec node "$OUT" "$@"

@@ -14,4 +14,10 @@ describe("cli", () => {
   it("returns nothing for a comment", () => {
     expect(cliAnswers("// just a note")).toEqual([]);
   });
+  it("uses the static rate table (no fetch in the CLI)", () => {
+    expect(cliAnswers("10 USD in EUR")).toEqual(["€9.00"]);
+  });
+  it("returns nothing for blank input", () => {
+    expect(cliAnswers("   \n  ")).toEqual([]);
+  });
 });

@@ -174,7 +174,7 @@ const DEFS: Def[] = [
   { id: "kohm", cat: "resistance", factor: 1e3, symbol: "kΩ", names: ["kohm", "kohms", "kilohm", "kilohms"] },
 
   // capacitance, base farad ("F" alone stays Fahrenheit, so farads go by name)
-  { id: "F", cat: "capacitance", factor: 1, symbol: "F", names: ["farad", "farads"] },
+  { id: "farad", cat: "capacitance", factor: 1, symbol: "F", names: ["farad", "farads"] },
   { id: "mF", cat: "capacitance", factor: 0.001, symbol: "mF", names: ["mf", "millifarad", "millifarads"] },
   { id: "uF", cat: "capacitance", factor: 1e-6, symbol: "µF", names: ["uf", "microfarad", "microfarads"] },
 
